@@ -4,7 +4,7 @@ from os.path import expanduser, join
 import csv
 
 home = expanduser("~")
-expPath = join(home, "Dropbox", "all_subjects.csv")  # path to custom list; edit
+expPath = join(home, "Dropbox", "SufAmb", "all_subjects.csv")  # path to custom list; edit
 corPath = join(home, "Dropbox", "corpora")  # path to corpora; edit
 elpPath = join(corPath, "ELP", "ELPfull.csv")
 clxPath = join(corPath, "CELEX_V2")
@@ -12,6 +12,7 @@ slxPath = join(corPath, "SUBTLEX-US.csv")
 aoaPath = join(corPath, "AoA.csv")
 dbParams = [(elpPath, 'elp'), (slxPath, 'slx'), (aoaPath, 'aoa')]
 
+# TODO: make_corpus function that pickles all dbs
 
 class Corpus(object):
 
@@ -43,9 +44,10 @@ class Corpus(object):
     def read_clx(self, clx_path=clxPath):
         """Special function for reading and combining sections of the CELEX database.
         Make sure csv files are alphabetized (unchanged) before calling this.
+        Must use 'noduplicates' version for files that have one.
         """
-        groups = {'lemmas': ['efl', 'eml', 'eol', 'epl', 'esl'],
-                  'wordforms': ['efw', 'emw', 'eow', 'epw'],
+        groups = {'lemmas': ['efl', 'eml_noduplicates', 'eol_noduplicates', 'epl_noduplicates', 'esl'],
+                  'wordforms': ['efw', 'emw', 'eow_noduplicates', 'epw_noduplicates'],
                   'syllables': ['efs'],
                   'types': ['etc']}
         item_names = {'lemmas': 'Head', 'wordforms': 'Word', 'syllables': 'Syllable', 'types': 'Type'}
