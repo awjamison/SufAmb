@@ -73,16 +73,12 @@ class Corpus(object):
         col2 = self.dbinfo[db2]['itemName']
         col1 = {x[col1] for x in self.db[db1]}
         col2 = {x[col2] for x in self.db[db2]}
-        if show_items is False:
+        if show_items:
+            notindb1 = col1 - col2
+            notindb2 = col2 - col1
+            return notindb1, notindb2
+        else:
             if col1 == col2: return True, True
             elif col1 <= col2: return True, False
             elif col2 <= col1: return False, True
             else: return False, False
-        elif show_items is True:
-            notindb1 = col1 - col2
-            notindb2 = col2 - col1
-            return notindb1, notindb2
-
-                
-
-    
