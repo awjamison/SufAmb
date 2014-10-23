@@ -13,3 +13,7 @@ from nltk.corpus import wordnet as wn
 # NV Synset count, H for types and types+tokens
 # SUBTLEX, OLD20, AoA, transitivity, denominal/deverbal
 
+
+class LexDecVars(object):
+
+    def __init__(self,

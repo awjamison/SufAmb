@@ -4,12 +4,13 @@ from os.path import expanduser, join
 import csv
 
 home = expanduser("~")
-expPath = join(home, "Documents", "sufAmb", "all_subjects.csv")  # path to custom list; edit
-corPath = join(home, "Documents", "corpora")  # path to corpora; edit
+expPath = join(home, "Dropbox", "all_subjects.csv")  # path to custom list; edit
+corPath = join(home, "Dropbox", "corpora")  # path to corpora; edit
 elpPath = join(corPath, "ELP", "ELPfull.csv")
 clxPath = join(corPath, "CELEX_V2")
 slxPath = join(corPath, "SUBTLEX-US.csv")
-aoaPath = join("AoA.csv")
+aoaPath = join(corPath, "AoA.csv")
+dbParams = [(elpPath, 'elp'), (slxPath, 'slx'), (aoaPath, 'aoa')]
 
 
 class Corpus(object):
@@ -23,7 +24,22 @@ class Corpus(object):
             reader = csv.DictReader(f)
             self.db[db_name] = list(reader)
             self.dbinfo[db_name] = {'item_name': item_name}
-    
+
+    def read_multiple(self, dbs=dbParams, include_clx=True, clx_path=clxPath):
+        """Reads multiple databases. Takes a list list of tuples (path, db_name)
+        and passes them as arguments to 'read'. Can provide optional third
+        element item_name, otherwise item_name=='Word'.
+        """
+        for db in dbs:
+            if len(db) == 2:
+                self.read(db[0], db[1])
+            elif len(db) == 3:
+                self.read(db[0], db[1], db[2])
+            else:
+                raise ValueError("Incorrect number of elements.")
+        if include_clx:
+            self.read_clx(clx_path)
+
     def read_clx(self, clx_path=clxPath):
         """Special function for reading and combining sections of the CELEX database.
         Make sure csv files are alphabetized (unchanged) before calling this.
