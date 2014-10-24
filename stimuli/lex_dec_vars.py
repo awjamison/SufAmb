@@ -49,7 +49,51 @@ class LexDecVars(Corpus):
                 if self.debug:
                     record['deriv_family_size'] = decompositions
             else:
-                record['deriv_family_size'] = None
+                record['deriv_family_size'] = 0
+
+    def right_derivational_family_entropy(self, include_multiword=True):
+        # include_multiword: if this option is set to false, only
+        # one-word lemmas are considered. For example, "sleep in" and
+        # "beauty-sleep" are ignored, but "oversleep" and "sleepwalk" are
+        # included. This is really arbitrary. Unfortunately.
+        if 'clx-lemmas' not in self.db:
+            self.read_clx()
+
+        by_morpheme = {}
+
+        for lemma in self.db['clx-lemmas']:
+            if not include_multiword and ('-' in lemma['Head'] or
+            ' ' in lemma['Head']):
+                continue
+            decomposition = lemma['Imm']
+            morphemes = decomposition.split('+')
+            if morphemes[0] in self.words:
+                by_morpheme.setdefault(morphemes[0], list()).append(lemma)
+
+        for record in self.db['exp']:
+            derived = by_morpheme.get(record['Word'])
+            if derived is not None:
+                freqs = [x['Cob'] for x in derived]
+                record['right_deriv_entropy'] = self.entropy(freqs)
+            else:
+                record['right_deriv_entropy'] = 0
+
+    def entropy(self, vec, smoothing_constant=1):
+        """H(A) == sum_x( -p(x_i|a)*log(p(x_i|a) ) where x is the
+        cardinality of X, a is the cardinality of A, and X is in A.
+        """
+
+        freqs = [float(x) + smoothing_constant for x in vec]
+        if sum(freqs) == 0:
+            return -1
+        probs = [f / sum(freqs) for f in freqs]
+        s = 0
+        for p in probs:
+            s -= 0 if p == 0 else p * math.log(p)
+        s /= math.log(2)
+        return s
+
+
 
 # for testing
 def debug():
