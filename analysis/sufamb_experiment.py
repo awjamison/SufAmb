@@ -1,8 +1,7 @@
 
 import os
-
+import socket
 from mne import set_log_level
-
 from numpy import logical_and #@UnresolvedImport
 
 import matplotlib
@@ -153,9 +152,12 @@ class SufAmb(MneExperiment):
 # don't print a bunch of info
 set_log_level('warning')
 
-# create instance
-e = SufAmb('/Volumes/BackUp/sufAmb')
-
+# create instance upon importing module
+if socket.gethostname() == 'silversurfer.linguistics.fas.nyu.edu':
+    e = SufAmb('/Volumes/BackUp/sufAmb')  # data is stored on silversurfer
+else:
+    print "Trying to connect to data drive."
+    e = SufAmb('/Volumes/BackUp/sufAmb')
 
         
 # Number of good trials per condition
@@ -175,8 +177,3 @@ e = SufAmb('/Volumes/BackUp/sufAmb')
 #     src = e.load_src()
 #     print subject, src[0]['vertno']
 
-# get sensor index from sensor name:
-# all_ds['meg'].sensor.dimindex('MEG 050')
-
-# get sensor name from sensor index:
-# all_ds['meg'].sensor.names[46]
