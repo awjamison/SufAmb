@@ -35,7 +35,7 @@ def ols(e, IVs, DV='src', factor='Type', level='all', ndvar=True, parc='frontal_
     if factor is not None:
         if events.has_key(factor) is False:
             raise ValueError("Factor %s is not in the log file." % factor)
-        if not level in factor.cells or level == 'all':
+        if not level in events[factor].cells or level == 'all':
             raise ValueError("Level is not recognized.")
     else:
         if not level == "all":

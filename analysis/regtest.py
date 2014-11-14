@@ -19,9 +19,10 @@ for lev in tests:
         factor, level = None, 'all'
     else:
         factor, level = 'Type', lev
-    for t in tests[lev]:
+    for t in range(len(tests[lev])):
         IVs = covar + tests[lev][t]
         reg = ols(e, IVs, factor=factor, level=level)
-        tname = '_'.join(tests[lev[t]])
-        path = '/Volumes/BackUp/sufAmb/regression/ols_%s.pickled' % tname
+        varnames = '_'.join(tests[lev][t])
+        name = lev + '-' + varnames
+        path = '/Volumes/BackUp/sufAmb/regression/ols_%s.pickled' % name
         save.pickle(reg, path)
