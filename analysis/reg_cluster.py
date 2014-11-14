@@ -7,8 +7,6 @@ Created on Aug 18, 2014
 import eelbrain
 from eelbrain import save, load, testnd
 
-eelbrain._set_log_level('debug')
-
 def reg_clusters_t_src(mod, IV, factor=None, c1=None, c0=None):
     """ Cluster permutation (src x time) t-tests on regression coefficients.
     Example: mod='main-VerbGivenWord', IV='LogFre'
@@ -29,6 +27,9 @@ def reg_clusters_t_src(mod, IV, factor=None, c1=None, c0=None):
     minsource=10
 
     if factor is None:
+        test = testnd.ttest_1samp(Y=Y, ds=data, match=match, samples=samples, pmin=pmin,
+                                  tstart=tstart, tstop=tstop, mintime=mintime, minsource=minsource)
+    elif factor == 'main':
         test = testnd.ttest_1samp(Y=Y, ds=data.sub("condition=='main'"), match=match, samples=samples, pmin=pmin,
                                   tstart=tstart, tstop=tstop, mintime=mintime, minsource=minsource)
     else:
