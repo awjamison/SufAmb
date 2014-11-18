@@ -6,7 +6,7 @@ Created on Aug 17, 2014
 
 from eelbrain import Dataset, Factor, morph_source_space, combine
 
-def ols(e, IVs, DV='src', factor='Type', level='all', ndvar=True, parc='frontal_temporal'):
+def ols(e, IVs, DV='src', factor='Type', level='all', ndvar=True, parc='frontal_temporal_parietal'):
     """OLS for main effect, level of a factor, or main effect and all levels of a factor.\n
     \n
     Fits a separate model to each condition (level), so values of a particular variable may not be comparable across\n
