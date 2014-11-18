@@ -54,7 +54,7 @@ class SufAmb(MneExperiment):
                  'epoch': 'epoch_behav_fltr',
                  'rej': 'man',
                  'model': 'Condition',
-                 'parc': 'frontal_temporal',
+                 'parc': 'frontal_temporal_parietal',
                  'src': 'ico-4'
                  }
     
