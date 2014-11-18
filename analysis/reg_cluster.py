@@ -15,6 +15,8 @@ def reg_clusters_t_src(mod, IV, factor=None, c1=None, c0=None):
     dr = '/Volumes/Backup/sufAmb/regression/'
     f = dr+'ols_'+mod+'.pickled'
     data = load.unpickle(f)
+    cond = "predictor=='%s'" % IV
+    data = data.sub(cond)  # smaller ds with only the predictor of interest
 
     # cluster permutation parameters
     Y='beta'
