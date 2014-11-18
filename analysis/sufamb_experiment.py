@@ -2,7 +2,7 @@
 import os
 import socket
 from mne import set_log_level
-from numpy import logical_and #@UnresolvedImport
+from numpy import logical_and
 
 import matplotlib
 matplotlib.use('wxagg')
@@ -61,7 +61,7 @@ class SufAmb(MneExperiment):
     tests = {'TypeXDominanceCategory':('anova', 'Type%DominanceCategory', 'Type*DominanceCategory*subject'),
              }
     
-    parcs = ['', 'frontal_temporal']
+    parcs = ['', 'frontal_temporal_parietal']
 
     def label_events(self, ds, experiment, subject):
         """
