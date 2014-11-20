@@ -1,4 +1,5 @@
 __author__ = 'Andrew Jamison'
+# much of the code is adapted from Tal Linzen (https://github.com/TalLinzen)
 
 import math
 from corpus import *
@@ -21,6 +22,24 @@ class LexDecVars(Corpus):
         self.read(path, 'exp', item_name)
         self.words = tuple(w[item_name] for w in self.db['exp'])
         self.debug = debug
+        self._lemid_lookup = _make_LemID_lookup()
+        self._flect_lookup = _make_Flect_lookup()
+
+    def _make_LemID_lookup(self):
+        if 'clx-lemmas' not in self.db:
+            self.read_clx()
+        LemID_lookup = {}
+        for wf in self.db['clx-wordforms']:
+            LemID_lookup.setdefault(wf['Word'], set()).add(wf['IdNumLemma'])
+        return LemID_lookup
+
+    def _make_Flect_lookup(self):
+        if 'clx-lemmas' not in self.db:
+            self.read_clx()
+        Flect_lookup = {}
+        for wf in self.db['clx-wordforms']:
+            Flect_lookup.setdefault(wf['IdNumLemma'], set()).add(wf['Word'])
+        return Flect_lookup
 
     def derivational_family_size(self, include_multiword=True):
         # include_multiword: if this option is set to false, only
