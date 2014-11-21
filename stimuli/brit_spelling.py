@@ -24,6 +24,6 @@ def get_translations(cor_path=corPath):
                     american = american.strip()
                     brit = spellings[1].split(":")[1]
                     brit = brit.strip()
-                    translations.append({'american': american, 'brit': brit})
+                    translations.append({'American': american, 'British': brit})
     return translations
 

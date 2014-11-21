@@ -66,13 +66,13 @@ class Corpus(object):
                         i += 1
             db_name = 'clx-'+group
             self.db[db_name] = combined
-            self.dbinfo[db_name] = {'itemName': item_names[group]}
+            self.dbinfo[db_name] = {'item_name': item_names[group]}
 
     def check_matches(self, db1, db2, show_items=False):
         """Compares items from two databases.
         """
-        col1 = self.dbinfo[db1]['itemName']
-        col2 = self.dbinfo[db2]['itemName']
+        col1 = self.dbinfo[db1]['item_name']
+        col2 = self.dbinfo[db2]['item_name']
         col1 = {x[col1] for x in self.db[db1]}
         col2 = {x[col2] for x in self.db[db2]}
         if show_items:
@@ -84,3 +84,22 @@ class Corpus(object):
             elif col1 <= col2: return True, False
             elif col2 <= col1: return False, True
             else: return False, False
+
+    def change_spelling(self, db, change_to='American'):
+        """Modifies the spelling of db to American or British.\n
+        Use with caution on a large db, because some spellings may be changed unnecessarily.
+        """
+        from brit_spelling import get_translations
+        translations = get_translations(corPath)
+        new_sp = {x[change_to] for x in translations}
+        if change_to == 'American':
+            change_sp = {x['British']: x['American'] for x in translations}
+        else:
+            change_sp = {x['American']: x['British'] for x in translations}
+
+        word = self.dbinfo[db]['item_name']
+        for entry in self.db[db]:
+            if entry[word] in new_sp:
+                continue  # avoid replacing a word when both spellings are listed
+            if entry[word] in change_sp:
+                entry[word] = change_sp[entry[word]]
