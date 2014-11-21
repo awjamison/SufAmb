@@ -85,9 +85,11 @@ class Corpus(object):
             elif col2 <= col1: return False, True
             else: return False, False
 
-    def change_spelling(self, db, change_to='American'):
-        """Modifies the spelling of db to American or British.\n
-        Use with caution on a large db, because some spellings may be changed unnecessarily.
+    def change_spelling(self, db1, db2=None, change_to='American'):
+        """Modifies the spelling of words in db1 to American or British.\n
+        Optional second argument db2 constrains spelling conversions in the following way:\n
+        a word in db1 is changed only if the old spelling is not in db2 and the new\n
+        spelling is in db2. This is useful if you want to minimally change db1 to match entries in db2.\n
         """
         from brit_spelling import get_translations
         translations = get_translations(corPath)
@@ -96,10 +98,17 @@ class Corpus(object):
             change_sp = {x['British']: x['American'] for x in translations}
         else:
             change_sp = {x['American']: x['British'] for x in translations}
+        if db2 is not None:
+            # changes new_sp to union of new_sp and db2
+            # changes change_sp to intersection of change_sp and db2
+            w = self.dbinfo[db2]['item_name']
+            in_db2 = {self.db[db2][x][w] for x in range(len(self.db[db2]))}
+            new_sp.update(in_db2)
+            change_sp = {k: change_sp[k] for k in change_sp if change_sp[k] in in_db2}
 
-        word = self.dbinfo[db]['item_name']
-        for entry in self.db[db]:
+        word = self.dbinfo[db1]['item_name']
+        for entry in self.db[db1]:
             if entry[word] in new_sp:
-                continue  # avoid replacing a word when both spellings are listed
+                continue  # avoid replacing a word when its spelling matches an item in the set of new spellings.
             if entry[word] in change_sp:
                 entry[word] = change_sp[entry[word]]
