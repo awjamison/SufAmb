@@ -22,8 +22,8 @@ class LexDecVars(Corpus):
         self.read(path, 'exp', item_name)
         self.words = tuple(w[item_name] for w in self.db['exp'])
         self.debug = debug
-        self._lemid_lookup = _make_LemID_lookup()
-        self._flect_lookup = _make_Flect_lookup()
+        self._lemid_lookup = self._make_LemID_lookup()
+        self._flect_lookup = self._make_Flect_lookup()
 
     def _make_LemID_lookup(self):
         if 'clx-lemmas' not in self.db:
@@ -41,16 +41,21 @@ class LexDecVars(Corpus):
             Flect_lookup.setdefault(wf['IdNumLemma'], set()).add(wf['Word'])
         return Flect_lookup
 
+    def inflectional_family_size(self):
+        for record in self.db['exp']:
+            w = record['Word']
+            ids = self._lemid_lookup[w]
+            flects = []
+            for id in ids:
+                flects.extend(self._flect_lookup[id])
+            record['infl_family_size'] = len(flects)
+
     def derivational_family_size(self, include_multiword=True):
         # include_multiword: if this option is set to false, only
         # one-word lemmas are considered. For example, "sleep in" and
         # "beauty-sleep" are ignored, but "oversleep" and "sleepwalk" are
         # included. This is really arbitrary. Unfortunately.
-        if 'clx-lemmas' not in self.db:
-            self.read_clx()
-
         by_morpheme = {}
-
         for lemma in self.db['clx-lemmas']:
             if not include_multiword and ('-' in lemma['Head'] or
             ' ' in lemma['Head']):
@@ -75,11 +80,7 @@ class LexDecVars(Corpus):
         # one-word lemmas are considered. For example, "sleep in" and
         # "beauty-sleep" are ignored, but "oversleep" and "sleepwalk" are
         # included. This is really arbitrary. Unfortunately.
-        if 'clx-lemmas' not in self.db:
-            self.read_clx()
-
         by_morpheme = {}
-
         for lemma in self.db['clx-lemmas']:
             if not include_multiword and ('-' in lemma['Head'] or
             ' ' in lemma['Head']):
