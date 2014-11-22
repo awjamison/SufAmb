@@ -1,114 +1,91 @@
 __author__ = 'Andrew Jamison'
 
-from os.path import expanduser, join
+from collections import Mapping, OrderedDict
+from os import path
 import csv
 
-home = expanduser("~")
-expPath = join(home, "Dropbox", "SufAmb", "all_subjects.csv")  # path to custom list; edit
-corPath = join(home, "Dropbox", "corpora")  # path to corpora; edit
-elpPath = join(corPath, "ELP", "ELPfull.csv")
-clxPath = join(corPath, "CELEX_V2")
-slxPath = join(corPath, "SUBTLEX-US.csv")
-aoaPath = join(corPath, "AoA.csv")
-dbParams = [(elpPath, 'elp'), (slxPath, 'slx'), (aoaPath, 'aoa')]
+# some helpful directories
+home = path.expanduser("~")
+expPath = path.join(home, "Dropbox", "SufAmb", "all_subjects.csv")  # path to custom list; edit
+corPath = path.join(home, "Dropbox", "corpora")  # path to corpora; edit
+elpPath = path.join(corPath, "ELP", "ELPfull.csv")
+clxPath = path.join(corPath, "CELEX_V2")
+slxPath = path.join(corPath, "SUBTLEX-US.csv")
+aoaPath = path.join(corPath, "AoA.csv")
 
-# TODO: make_corpus function that pickles all dbs
 
-class Corpus(object):
+class Corpus(Mapping):
+    """Special data container for a table of words and their properties.\n
+    Reads a csv file and constructs an ordered dictionary with additional attributes.
+    """
 
-    def __init__(self):
-        self.db = {}
-        self.dbinfo = {}
-    
-    def read(self, path, db_name, item_name='Word'):
-        with open(path) as f:
-            reader = csv.DictReader(f)
-            self.db[db_name] = list(reader)
-            self.dbinfo[db_name] = {'item_name': item_name}
+    def __init__(self, path_to_file, item_name='Word'):
+        self.name = path_to_file  # shows file origin as default
+        with open(path_to_file) as f:
+            db = list(csv.DictReader(f))
+        self._dict = OrderedDict((entry[item_name], entry) for entry in db)
+        if self.__len__() != len(db):
+            print "WARNING: duplicate entries for '%s'. Some entries were overwritten." % item_name
 
-    def read_multiple(self, dbs=dbParams, include_clx=True, clx_path=clxPath):
-        """Reads multiple databases. Takes a list list of tuples (path, db_name)
-        and passes them as arguments to 'read'. Can provide optional third
-        element item_name, otherwise item_name=='Word'.
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __len__(self):
+        return len(self._dict)
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def compare_items(self, compare_to, show_items=False):
+        """Compares keys to the keys of another Corpus instance or to elements of a list-like object.
         """
-        for db in dbs:
-            if len(db) == 2:
-                self.read(db[0], db[1])
-            elif len(db) == 3:
-                self.read(db[0], db[1], db[2])
-            else:
-                raise ValueError("Incorrect number of elements.")
-        if include_clx:
-            self.read_clx(clx_path)
-
-    def read_clx(self, clx_path=clxPath):
-        """Special function for reading and combining sections of the CELEX database.
-        Make sure csv files are alphabetized (unchanged) before calling this.
-        Must use 'noduplicates' version for files that have one.
-        """
-        groups = {'lemmas': ['efl', 'eml_noduplicates', 'eol_noduplicates', 'epl_noduplicates', 'esl'],
-                  'wordforms': ['efw', 'emw', 'eow_noduplicates', 'epw_noduplicates'],
-                  'syllables': ['efs'],
-                  'types': ['etc']}
-        item_names = {'lemmas': 'Head', 'wordforms': 'Word', 'syllables': 'Syllable', 'types': 'Type'}
-        for group in groups:
-            path = join(clx_path, groups[group][0]+".csv")
-            with open(path) as f:
-                combined = list(csv.DictReader(f))  # first db
-            if len(group) > 1:
-                for db in groups[group][1:]:
-                    path = join(clx_path, db+".csv")
-                    with open(path) as f:
-                        l = list(csv.DictReader(f))
-                    i = 0
-                    for x in l:  # add new entries
-                        combined[i].update(x)
-                        i += 1
-            db_name = 'clx-'+group
-            self.db[db_name] = combined
-            self.dbinfo[db_name] = {'item_name': item_names[group]}
-
-    def check_matches(self, db1, db2, show_items=False):
-        """Compares items from two databases.
-        """
-        col1 = self.dbinfo[db1]['item_name']
-        col2 = self.dbinfo[db2]['item_name']
-        col1 = {x[col1] for x in self.db[db1]}
-        col2 = {x[col2] for x in self.db[db2]}
-        if show_items:
-            notindb1 = col1 - col2
-            notindb2 = col2 - col1
-            return notindb1, notindb2
+        in_corpus = set(self._dict.keys())
+        if isinstance(compare_to, Corpus):
+            in_comparison = set(compare_to.keys())
         else:
-            if col1 == col2: return True, True
-            elif col1 <= col2: return True, False
-            elif col2 <= col1: return False, True
+            in_comparison = set(compare_to)
+        if show_items:
+            not_in_corpus = in_corpus - in_comparison
+            not_in_comparison = in_comparison - in_corpus
+            return {'not_in_corpus': not_in_corpus, 'not_in_comparison': not_in_comparison}
+        else:
+            if in_corpus == in_comparison: return True, True
+            elif in_corpus <= in_comparison: return True, False
+            elif in_comparison <= in_corpus: return False, True
             else: return False, False
 
-    def change_spelling(self, db1, db2=None, change_to='American'):
-        """Modifies the spelling of words in db1 to American or British.\n
-        Optional second argument db2 constrains spelling conversions in the following way:\n
-        a word in db1 is changed only if the old spelling is not in db2 and the new\n
-        spelling is in db2. This is useful if you want to minimally change db1 to match entries in db2.\n
+    def change_spelling(self, change_to, compare_to=None):
+        """Modifies the spelling of keys to American or British English.\n
+        Optional second argument constrains spelling conversions in the following way:\n
+        a key is changed only if the old spelling is not in the comparison object and the new\n
+        spelling is in the comparison object. This is useful if you want to minimally change \n
+        keys to match elements in the comparison object.\n
+        Note: it is possible to recover the original spelling of each key from its <item_name>\n
+        value supplied in __init__.
         """
         from brit_spelling import get_translations
-        translations = get_translations(corPath)
+        translations = get_translations(corPath)  # must be able to find this directory
         new_sp = {x[change_to] for x in translations}
         if change_to == 'American':
             change_sp = {x['British']: x['American'] for x in translations}
         else:
             change_sp = {x['American']: x['British'] for x in translations}
-        if db2 is not None:
-            # changes new_sp to union of new_sp and db2
-            # changes change_sp to intersection of change_sp and db2
-            w = self.dbinfo[db2]['item_name']
-            in_db2 = {self.db[db2][x][w] for x in range(len(self.db[db2]))}
-            new_sp.update(in_db2)
-            change_sp = {k: change_sp[k] for k in change_sp if change_sp[k] in in_db2}
+        if compare_to is not None:
+            # changes new_sp to union of new_sp and compare_to
+            # changes change_sp to intersection of change_sp and compare_to
+            if isinstance(compare_to, Corpus):
+                in_comparison = set(compare_to.keys())
+            else:
+                in_comparison = set(compare_to)
+            new_sp.update(in_comparison)
+            change_sp = {k: change_sp[k] for k in change_sp if change_sp[k] in in_comparison}
 
-        word = self.dbinfo[db1]['item_name']
-        for entry in self.db[db1]:
-            if entry[word] in new_sp:
+        renamed = OrderedDict()
+        for entry in self._dict:
+            if entry in new_sp:
+                renamed[entry] = self._dict[entry]
                 continue  # avoid replacing a word when its spelling matches an item in the set of new spellings.
-            if entry[word] in change_sp:
-                entry[word] = change_sp[entry[word]]
+            if entry in change_sp:
+                spelling = change_sp[entry]
+                renamed[spelling] = self._dict[entry]
+        self._dict = renamed
