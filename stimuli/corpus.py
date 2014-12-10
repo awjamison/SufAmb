@@ -6,13 +6,13 @@ import csv
 
 # some helpful directories
 home = path.expanduser("~")
-expPath = path.join(home, "Dropbox", "SufAmb", "all_subjects.csv")  # path to custom list; edit
+expPath = path.join(home, "Dropbox", "SufAmb", "master_list35_update3.csv")  # path to custom list; edit
 corPath = path.join(home, "Dropbox", "corpora")  # path to corpora; edit
 elpPath = path.join(corPath, "ELP", "ELPfull.csv")
 clxPath = path.join(corPath, "CELEX_V2")
 slxPath = path.join(corPath, "SUBTLEX-US.csv")
 aoaPath = path.join(corPath, "AoA.csv")
-
+outPath = path.join(home, "Dropbox", "SufAmb", "this_is_a_test.csv")
 
 class Corpus(Mapping):
     """Special data container for a table of words and their properties.\n
@@ -21,8 +21,10 @@ class Corpus(Mapping):
 
     def __init__(self, path_to_file, item_name='Word'):
         self.name = path_to_file  # shows file origin as default
-        with open(path_to_file) as f:
-            db = list(csv.DictReader(f))
+        with open(path_to_file, 'r') as f:
+            reader = csv.DictReader(f)
+            self.fieldnames = reader.fieldnames
+            db = list(reader)
         self._dict = OrderedDict((entry[item_name], entry) for entry in db)
         if self.__len__() != len(db):
             print "WARNING: duplicate entries for '%s'. Some entries were overwritten." % item_name
@@ -58,7 +60,7 @@ class Corpus(Mapping):
         """Modifies the spelling of keys to American or British English.\n
         Optional second argument constrains spelling conversions in the following way:\n
         a key is changed only if the old spelling is not in the comparison object and the new\n
-        spelling is in the comparison object. This is useful if you want to minimally change \n
+        spelling is in the comparison object. This is useful if you want to minimally change\n
         keys to match elements in the comparison object.\n
         Note: it is possible to recover the original spelling of each key from its <item_name>\n
         value supplied in __init__.
@@ -89,3 +91,12 @@ class Corpus(Mapping):
                 spelling = change_sp[entry]
                 renamed[spelling] = self._dict[entry]
         self._dict = renamed
+
+    def write(self, path):
+        """Writes data to a csv file.
+        """
+        with open(path, 'w') as f:
+            writer = csv.DictWriter(f, delimiter=',', fieldnames=self.fieldnames)
+            writer.writeheader()
+            writer.writerows(self._dict.values())
+
