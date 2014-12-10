@@ -15,9 +15,15 @@ import collections
 import os
 
 import numpy as np
-from nltk.corpus import wordnet as wn
 from celex import Celex
 from corpus import Corpus
+
+home = os.path.expanduser("~")
+path_to_ds = os.path.join(home, "Dropbox", "SufAmb", "all_subjects.csv")
+corPath = os.path.join(home, "Dropbox", "corpora")
+elpPath = os.path.join(corPath, "ELP", "ELPfull.csv")
+slxPath = os.path.join(corPath, "SUBTLEX-US.csv")
+aoaPath = os.path.join(corPath, "AoA.csv")
 
 if 'clx' not in globals():
     path_to_clx = os.path.expanduser("~/Dropbox/corpora/CELEX_V2/english")
@@ -25,14 +31,28 @@ if 'clx' not in globals():
     clx.load_lemmas()
     clx.load_wordforms()
     clx.map_lemmas_to_wordforms()
-
-path_to_ds = os.path.expanduser("~/Dropbox/SufAmb/all_subjects.csv")
+if 'elp' not in globals():
+    elp = Corpus(elpPath)
+if 'slx' not in globals():
+    slx = Corpus(slxPath)
+if 'aoa' not in globals():
+    aoa = Corpus(aoaPath)
+if 'wn' not in globals():
+    from nltk.corpus import wordnet as wn
 
 
 class LexVars(Corpus):
 
-    def __init__(self, path=path_to_ds, item_name='Word'):
+    def __init__(self, path, item_name='Word'):
         super(LexVars, self).__init__(path, item_name)
+
+    def lemma_headwords(self):
+        """For each word returns the Celex lemma headword.
+        """
+        for record in self._dict:
+            lemma_id = clx.wordform_lookup(record)[0].IdNumLemma
+            lemma = clx.lemma_by_id(lemma_id)
+            self._dict[record]['lemma_headword'] = lemma.Head
 
     def wordnet_synsets(self):
         """Number of WordNet "synsets" (roughly, senses) for the given word.
@@ -56,13 +76,16 @@ class LexVars(Corpus):
             else:
                 self._dict[record]['vtn_synsets'] = 0
 
-    def lemma_headwords(self):
-        """For each word returns the Celex lemma headword.
-        """
+    def age_of_acquisition(self):
+
         for record in self._dict:
-            lemma_id = clx.wordform_lookup(record)[0].IdNumLemma
-            lemma = clx.lemma_by_id(lemma_id)
-            self._dict[record]['lemma_headword'] = lemma.Head
+            if record in aoa:
+                self._dict[record]['AoA'] = aoa[record]['AoA_Kup_lem']
+                self._dict[record]['AoA_perc_known'] = aoa[record]['Perc_known_lem']
+            else:  # use lemma; should be ok b/c this is also what the corpus does for missing data
+                item = self._dict[record]['lemma_headword']
+                self._dict[record]['AoA'] = aoa[item]['AoA_Kup_lem']
+                self._dict[record]['AoA_perc_known'] = aoa[item]['Perc_known_lem']
 
     def _pos_freq(self, lemma, pos):
         """Total frequency of the lemma when used as the given part of speech:
@@ -245,3 +268,9 @@ class LexVars(Corpus):
         # then p(x) * log(p(x)) = 0 in the definition of entropy)
         probs[probs == 0] = 1
         return -np.sum(probs * np.log2(probs))
+
+
+def debug():
+    lex = LexVars(path_to_ds)
+    for w in lex:
+        lex[w]['lemma_headword'] = lex[w]['Stem']  # class method gets some headwords wrong
