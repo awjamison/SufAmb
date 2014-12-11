@@ -38,6 +38,16 @@ class Corpus(Mapping):
     def __iter__(self):
         return iter(self._dict)
 
+    def _append_column(self, column, name):
+        """Column is a list-like object with len(column) == len(corpus).
+        """
+        column = tuple(column)
+        if len(column) != self.__len__():
+            raise ValueError("Length of column object must match length of Corpus instance.")
+        for entry, index in zip(self._dict, xrange(len(column))):
+            self._dict[entry][name] = column[index]
+        self.fieldnames.append(name)
+
     def compare_items(self, compare_to, show_items=False):
         """Compares keys to the keys of another Corpus instance or to elements of a list-like object.
         """
