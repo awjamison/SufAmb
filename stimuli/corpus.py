@@ -48,23 +48,26 @@ class Corpus(Mapping):
             self._dict[entry][name] = column[index]
         self.fieldnames.append(name)
 
-    def compare_items(self, compare_to, show_items=False):
+    def compare_items(self, compare_to, show_missing_items=False):
         """Compares keys to the keys of another Corpus instance or to elements of a list-like object.
         """
-        in_corpus = set(self._dict.keys())
         if isinstance(compare_to, Corpus):
             in_comparison = set(compare_to.keys())
         else:
             in_comparison = set(compare_to)
-        if show_items:
-            not_in_corpus = in_corpus - in_comparison
-            not_in_comparison = in_comparison - in_corpus
+        if show_missing_items:
+            in_corpus = set(self._dict.keys())
+            not_in_corpus = in_comparison - in_corpus
+            not_in_comparison = in_corpus - in_comparison
             return {'not_in_corpus': not_in_corpus, 'not_in_comparison': not_in_comparison}
         else:
-            if in_corpus == in_comparison: return True, True
-            elif in_corpus <= in_comparison: return True, False
-            elif in_comparison <= in_corpus: return False, True
-            else: return False, False
+            in_corpus = []
+            for entry in self._dict:
+                if entry in in_comparison:
+                    in_corpus.append(True)
+                else:
+                    in_corpus.append(False)
+            return in_corpus
 
     def change_spelling(self, change_to, compare_to=None):
         """Modifies the spelling of keys to American or British English.\n
