@@ -1,29 +1,16 @@
 __author__ = 'Andrew Jamison'
-# Adapted from Tal Linzen's LexVar class (https://github.com/TalLinzen/lexvars)
-
-# TODO: compute these variables
-# form_H_InfFam, form_H_affixes, NV_H_InfFam, NV_H_affixes, NV_stem_H
-# NVAdj_H_InfFam, NVAdj_H_affixes
-# Delta_H for all of the above, except NV_stem_H
-# V_H ratio, Delta_V_H ratio for all above
-# H_DerFam
-# NV Synset count, H for types and types+tokens
-# SUBTLEX, OLD20, AoA, transitivity, denominal/deverbal
+# adapted from Tal Linzen's LexVar class
 
 import __builtin__
+import csv
 import collections
+import itertools
 import os
 
 import numpy as np
+from nltk.corpus import wordnet as wn
 from celex import Celex
 from corpus import Corpus
-
-home = os.path.expanduser("~")
-path_to_ds = os.path.join(home, "Dropbox", "SufAmb", "all_subjects.csv")
-corPath = os.path.join(home, "Dropbox", "corpora")
-elpPath = os.path.join(corPath, "ELP", "ELPfull.csv")
-slxPath = os.path.join(corPath, "SUBTLEX-US.csv")
-aoaPath = os.path.join(corPath, "AoA.csv")
 
 if 'clx' not in globals():
     path_to_clx = os.path.expanduser("~/Dropbox/corpora/CELEX_V2/english")
@@ -31,48 +18,20 @@ if 'clx' not in globals():
     clx.load_lemmas()
     clx.load_wordforms()
     clx.map_lemmas_to_wordforms()
-if 'elp' not in globals():
-    elp = Corpus(elpPath)
-if 'slx' not in globals():
-    slx = Corpus(slxPath)
-if 'aoa' not in globals():
-    aoa = Corpus(aoaPath)
-if 'wn' not in globals():
-    from nltk.corpus import wordnet as wn
+
+path_to_ds = os.path.expanduser("~/Dropbox/SufAmb/all_subjects.csv")
 
 
 class LexVars(Corpus):
 
-    def __init__(self, path, item_name='Word'):
+    def __init__(self, path=path_to_ds, item_name='Word'):
         super(LexVars, self).__init__(path, item_name)
-
-    def lemma_headwords(self):
-        """For each word returns the Celex lemma headword.
-        """
-        new_var = 'lemma_headword'
-        lemma_heads = [clx._lemmas[i]['Head'] for i in xrange(len(clx._lemmas))]
-        has_item = self.compare_items(lemma_heads)
-        new_column = []
-        if False in has_item:
-            print "WARNING: the following items have a value of 'None' for '%s': %s"\
-                % (new_var, self.compare_items(lemma_heads, True)['not_in_comparison'])
-        for record, exists in zip(self._dict, has_item):
-            if exists is True:
-                lemma_id = clx.wordform_lookup(record)[0].IdNumLemma
-                lemma_head = clx.lemma_by_id(lemma_id).Head
-            else:
-                lemma_head = None
-            new_column.append(lemma_head)
-        self._append_column(new_column, new_var)
 
     def wordnet_synsets(self):
         """Number of WordNet "synsets" (roughly, senses) for the given word.
         This variable collapses across different parts of speech, meanings,
         etc.
         """
-        new_var = []
-        has_item
-        new_column = []
         for record in self._dict:
             synsets = wn.synsets(record)
             if len(synsets) > 0:
@@ -86,34 +45,17 @@ class LexVars(Corpus):
             n_synsets = len(wn.synsets(record, 'n'))
             v_synsets = len(wn.synsets(record, 'v'))
             if n_synsets > 0:
-                self._dict[record]['vtn_synsets'] = float(v_synsets) / (n_synsets + v_synsets)
+                self._dict[record]['vtn_synsets'] = v_synsets / float(n_synsets)
             else:
                 self._dict[record]['vtn_synsets'] = 0
 
-    def age_of_acquisition(self):
-
+    def lemma_headwords(self):
+        """For each word returns the Celex lemma headword.
+        """
         for record in self._dict:
-            if record in aoa:
-                self._dict[record]['AoA'] = aoa[record]['AoA_Kup_lem']
-                self._dict[record]['AoA_perc_known'] = aoa[record]['Perc_known_lem']
-            else:  # use lemma; should be ok b/c this is also what the corpus does for missing data
-                item = self._dict[record]['lemma_headword']
-                self._dict[record]['AoA'] = aoa[item]['AoA_Kup_lem']
-                self._dict[record]['AoA_perc_known'] = aoa[item]['Perc_known_lem']
-
-    def subtitles(self):
-
-        for record in self._dict:
-            self._dict[record]['subtlx_log_fre'] = slx[record]['Lg10WF']
-            self._dict[record]['subtlx_log_cd'] = slx[record]['Lg10CD']
-
-    def levenshtein_distance(self):
-
-        for record in self._dict:
-            self._dict[record]['OLD'] = elp[record]['OLD']
-            self._dict[record]['OLDF'] = elp[record]['OLDF']
-            self._dict[record]['PLD'] = elp[record]['PLD']
-            self._dict[record]['PLDF'] = elp[record]['PLDF']
+            lemma_id = clx.wordform_lookup(record)[0].IdNumLemma
+            lemma = clx.lemma_by_id(lemma_id)
+            self._dict[record]['lemma_headword'] = lemma.Head
 
     def _pos_freq(self, lemma, pos):
         """Total frequency of the lemma when used as the given part of speech:
@@ -296,9 +238,3 @@ class LexVars(Corpus):
         # then p(x) * log(p(x)) = 0 in the definition of entropy)
         probs[probs == 0] = 1
         return -np.sum(probs * np.log2(probs))
-
-
-def debug():
-    lex = LexVars(path_to_ds)
-    lex._append_column([w['Stem'] for w in lex], 'lemma_headword')  # b/c class method gets some headwords wrong
-    return lex

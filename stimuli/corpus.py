@@ -69,6 +69,19 @@ class Corpus(Mapping):
                     in_corpus.append(False)
             return in_corpus
 
+    def has_value(self, column, expression, value, show_missing_values=False):
+        """For each item in Corpus class, True if <column expression value> evaluates to True.\n
+        Optionally returns the set of items for which the expression evaluates to False.
+        """
+        if type(value) is str:
+            re = "self._dict[entry]['%s'] %s '%s'" % (column, expression, value)
+        else:
+            re = "self._dict[entry]['%s'] %s %s" % (column, expression, value)
+        if show_missing_values:
+            return {entry for entry in self._dict if eval(re) is False}
+        else:
+            return [eval(re) for entry in self._dict]
+
     def change_spelling(self, change_to, compare_to=None):
         """Modifies the spelling of keys to American or British English.\n
         Optional second argument constrains spelling conversions in the following way:\n
