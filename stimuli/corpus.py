@@ -82,6 +82,39 @@ class Corpus(Mapping):
         else:
             return [eval(re) for entry in self._dict]
 
+    def copy_columns(self, copy_from, columns, show_missing_items=False):
+        has_item = self.compare_items(copy_from)
+        if isinstance(columns, str):  # single column
+            columns = [columns]
+        else:  # vector of columns
+            columns = list(columns)
+        if False in has_item:  # print warning message if item not found in 'copy_from'
+            if isinstance(copy_from, Corpus):
+                self._warning_msg(copy_from.name, copy_from, show_missing_items)
+            else:
+                self._warning_msg(str(type(copy_from)), copy_from, show_missing_items)
+        new_values = []
+        for entry, exists in zip(self._dict, has_item):  # iterate over each item
+            if exists:
+                item_values = []
+                for i in xrange(len(columns)):  # iterate over each variable
+                    value = copy_from[entry][columns[i]]
+                    item_values.append(value)
+            else:
+                item_values = [None]*len(columns)
+            new_values.append(item_values)
+        new_columns = zip(*new_values)  # transpose to list of columns
+        for column, i in zip(new_columns, xrange(len(columns))):
+            self._append_column(column, columns[i])
+
+    def _warning_msg(self, func_name, comparison, show_missing_items):
+        if show_missing_items:
+            print "WARNING: the following items from %s were not found and were given a value of 'None':\n %s" \
+                % (func_name, self.compare_items(comparison, True)['not_in_comparison'])
+        else:
+            print "WARNING: at least one item from %s was not found and was given a value of 'None'!\n" \
+                  "Set 'verbose' to 'True' to see the list of items." % func_name
+
     def change_spelling(self, change_to, compare_to=None):
         """Modifies the spelling of keys to American or British English.\n
         Optional second argument constrains spelling conversions in the following way:\n
