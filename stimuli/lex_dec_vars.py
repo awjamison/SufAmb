@@ -45,6 +45,15 @@ class LexVars(Corpus):
 
     def __init__(self, path, item_name='Word'):
         super(LexVars, self).__init__(path, item_name)
+        self.debug = True  # print verbose messages by default
+
+    def _warning_msg(self, func_name, comparison):
+        if self.debug:
+            print "WARNING: the following items have a value of 'None' for '%s':\n %s" \
+                % (func_name, self.compare_items(comparison, True)['not_in_comparison'])
+        else:
+            print "WARNING: at least one item has a value of 'None' for '%s!\n" \
+                  "Set 'debug' to 'True' to see the list of items." % func_name
 
     def lemma_headwords(self):
         """For each word returns the Celex lemma headword.
@@ -54,10 +63,9 @@ class LexVars(Corpus):
         has_item = self.compare_items(lemma_heads)
         new_column = []
         if False in has_item:
-            print "WARNING: the following items have a value of 'None' for '%s': %s"\
-                % (new_var, self.compare_items(lemma_heads, True)['not_in_comparison'])
+            self._warning_msg('lemma_headword', lemma_heads)
         for record, exists in zip(self._dict, has_item):
-            if exists is True:
+            if exists:
                 lemma_id = clx.wordform_lookup(record)[0].IdNumLemma
                 lemma_head = clx.lemma_by_id(lemma_id).Head
             else:
@@ -70,44 +78,85 @@ class LexVars(Corpus):
         This variable collapses across different parts of speech, meanings,
         etc.
         """
-        new_var = []
-        has_item
+        new_var = "n_synsets"
+        wn_lemmas = [l.encode('ascii') for l in wn.all_lemma_names()]
+        has_item = self.compare_items(wn_lemmas)
         new_column = []
-        for record in self._dict:
-            synsets = wn.synsets(record)
-            if len(synsets) > 0:
-                self._dict[record]['n_synsets'] = len(synsets)
+        if False in has_item:
+            self._warning_msg('wordnet_synsets', wn_lemmas)
+        for record, exists in zip(self._dict, has_item):
+            if exists:
+                n_synsets = len(wn.synsets(record))
             else:
-                self._dict[record]['n_synsets'] = 0
+                n_synsets = None
+            new_column.append(n_synsets)
+        self._append_column(new_column, new_var)
 
     def synset_ratio(self):
-
-        for record in self._dict:
-            n_synsets = len(wn.synsets(record, 'n'))
-            v_synsets = len(wn.synsets(record, 'v'))
-            if n_synsets > 0:
-                self._dict[record]['vtn_synsets'] = float(v_synsets) / (n_synsets + v_synsets)
+        new_var = "vtn_synsets"
+        wn_lemmas = [l.encode('ascii') for l in wn.all_lemma_names()]
+        has_item = self.compare_items(wn_lemmas)
+        new_column = []
+        if False in has_item:
+            self._warning_msg('synset_ratio', wn_lemmas)
+        for record, exists in zip(self._dict, has_item):
+            if exists:
+                n_synsets = len(wn.synsets(record, 'n'))
+                v_synsets = len(wn.synsets(record, 'v'))
+                vtn_synsets = float(v_synsets) / (n_synsets + v_synsets)
             else:
-                self._dict[record]['vtn_synsets'] = 0
+                vtn_synsets = None
+            new_column.append(vtn_synsets)
+        self._append_column(new_column, new_var)
 
     def age_of_acquisition(self):
-
-        for record in self._dict:
-            if record in aoa:
-                self._dict[record]['AoA'] = aoa[record]['AoA_Kup_lem']
-                self._dict[record]['AoA_perc_known'] = aoa[record]['Perc_known_lem']
-            else:  # use lemma; should be ok b/c this is also what the corpus does for missing data
-                item = self._dict[record]['lemma_headword']
-                self._dict[record]['AoA'] = aoa[item]['AoA_Kup_lem']
-                self._dict[record]['AoA_perc_known'] = aoa[item]['Perc_known_lem']
+        new_var = "AoA"
+        has_item = self.compare_items(aoa)
+        new_column1, new_column2 = [], []
+        if False in has_item:
+            self._warning_msg('age_of_acquisition', aoa)
+        for record, exists in zip(self._dict, has_item):
+            if exists:
+                age = aoa[record]['AoA_Kup_lem']
+                p_age = [record]['Perc_known_lem']
+            else:
+                age, p_age = None, None
+            new_column1.append(age), new_column2.append(p_age)
+        self._append_column(new_column1, new_var), self._append_column(new_column1, 'AoA_perc_known')
 
     def subtitles(self):
-
-        for record in self._dict:
-            self._dict[record]['subtlx_log_fre'] = slx[record]['Lg10WF']
-            self._dict[record]['subtlx_log_cd'] = slx[record]['Lg10CD']
+        new_var = "subtlx_log_fre"
+        has_item = self.compare_items(slx)
+        new_column1, new_column2 = [], []
+        if False in has_item:
+            self._warning_msg('subtitles', slx)
+        for record, exists in zip(self._dict, has_item):
+            if exists:
+                fre = slx[record]['Lg10WF']
+                cd = slx[record]['Lg10CD']
+            else:
+                fre, cd = None, None
+            new_column1.append(fre), new_column2.append(cd)
+        self._append_column(new_column1, new_var), self._append_column(new_column2, "subtlx_log_cd")
 
     def levenshtein_distance(self):
+        var_names = ['OLD', 'OLDF', 'PLD', 'PLDF']
+        new_vars = ['OLD', 'OLDF', 'PLD', 'PLDF']
+        has_item = self.compare_items(elp)
+        new_values = []
+        if False in has_item:
+            self._warning_msg('levenshtein_distance', elp)
+        for record, exists in zip(self._dict, has_item):
+            if exists:
+                item_values = []
+                for i in xrange(len(var_names)):
+                    value = elp[record][var_names][i]
+                    item_values.append(value)
+            else:
+                item_values = [None]*len(var_names)
+            new_values.append(item_values)
+        for record,
+
 
         for record in self._dict:
             self._dict[record]['OLD'] = elp[record]['OLD']
