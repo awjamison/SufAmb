@@ -47,14 +47,6 @@ class LexVars(Corpus):
         super(LexVars, self).__init__(path, item_name)
         self.debug = True  # print verbose messages by default
 
-    def _warning_msg(self, func_name, comparison):
-        if self.debug:
-            print "WARNING: the following items have a value of 'None' for '%s':\n %s" \
-                % (func_name, self.compare_items(comparison, True)['not_in_comparison'])
-        else:
-            print "WARNING: at least one item has a value of 'None' for '%s!\n" \
-                  "Set 'debug' to 'True' to see the list of items." % func_name
-
     def lemma_headwords(self):
         """For each word returns the Celex lemma headword.
         """
@@ -110,59 +102,13 @@ class LexVars(Corpus):
         self._append_column(new_column, new_var)
 
     def age_of_acquisition(self):
-        new_var = "AoA"
-        has_item = self.compare_items(aoa)
-        new_column1, new_column2 = [], []
-        if False in has_item:
-            self._warning_msg('age_of_acquisition', aoa)
-        for record, exists in zip(self._dict, has_item):
-            if exists:
-                age = aoa[record]['AoA_Kup_lem']
-                p_age = [record]['Perc_known_lem']
-            else:
-                age, p_age = None, None
-            new_column1.append(age), new_column2.append(p_age)
-        self._append_column(new_column1, new_var), self._append_column(new_column1, 'AoA_perc_known')
+        self.copy_columns(aoa, ['AoA_Kup_lem', 'Perc_known_lem'])
 
     def subtitles(self):
-        new_var = "subtlx_log_fre"
-        has_item = self.compare_items(slx)
-        new_column1, new_column2 = [], []
-        if False in has_item:
-            self._warning_msg('subtitles', slx)
-        for record, exists in zip(self._dict, has_item):
-            if exists:
-                fre = slx[record]['Lg10WF']
-                cd = slx[record]['Lg10CD']
-            else:
-                fre, cd = None, None
-            new_column1.append(fre), new_column2.append(cd)
-        self._append_column(new_column1, new_var), self._append_column(new_column2, "subtlx_log_cd")
+        self.copy_columns(slx, ['Lg10WF', 'Lg10CD'])
 
     def levenshtein_distance(self):
-        var_names = ['OLD', 'OLDF', 'PLD', 'PLDF']
-        new_vars = ['OLD', 'OLDF', 'PLD', 'PLDF']
-        has_item = self.compare_items(elp)
-        new_values = []
-        if False in has_item:
-            self._warning_msg('levenshtein_distance', elp)
-        for record, exists in zip(self._dict, has_item):
-            if exists:
-                item_values = []
-                for i in xrange(len(var_names)):
-                    value = elp[record][var_names][i]
-                    item_values.append(value)
-            else:
-                item_values = [None]*len(var_names)
-            new_values.append(item_values)
-        for record,
-
-
-        for record in self._dict:
-            self._dict[record]['OLD'] = elp[record]['OLD']
-            self._dict[record]['OLDF'] = elp[record]['OLDF']
-            self._dict[record]['PLD'] = elp[record]['PLD']
-            self._dict[record]['PLDF'] = elp[record]['PLDF']
+        self.copy_columns(elp, ['OLD', 'OLDF', 'PLD', 'PLDF'])
 
     def _pos_freq(self, lemma, pos):
         """Total frequency of the lemma when used as the given part of speech:
@@ -176,17 +122,23 @@ class LexVars(Corpus):
     def _smoothed_log_ratio(self, a, b):
         return np.log2((a + 1.) / (b + 1.))
 
-    def log_noun_to_verb_ratio(self, use_lemma=True):
-        for record in self._dict:
-            if use_lemma:
+    def log_noun_to_verb_ratio(self):
+        new_var = "vtn_ratio"
+        lemma_heads = self._dict['lemma_headword']
+        has_item = self.compare_items(lemma_heads)
+        new_column = []
+        if False in has_item:
+            self._warning_msg('log_noun_to_verb_ratio', lemma_heads)
+        for record, exists in zip(self._dict, has_item):
+            if exists:
                 item = self._dict[record]['lemma_headword']
+                noun_freq = self._pos_freq(item, 'noun')
+                verb_freq = self._pos_freq(item, 'verb')
+                ratio = self._smoothed_log_ratio(noun_freq, verb_freq)
             else:
-                item = record
-                raise ValueError("use_lemma must be True.")
-            noun_freq = self._pos_freq(item, 'noun')
-            verb_freq = self._pos_freq(item, 'verb')
-            ratio = self._smoothed_log_ratio(noun_freq, verb_freq)
-            self._dict[record]['log_ntv_ratio'] = ratio
+                ratio = None
+            new_column.append(ratio)
+        self._append_column(new_column, new_var)
 
     def inflectional_entropy(self, smooth=1, verbose=False, use_lemma=True):
         """This function collapses across all relevant lemmas, e.g. the noun
@@ -284,9 +236,7 @@ class LexVars(Corpus):
             self._dict[record]['infl_ent_no_bare'] = self.entropy(common_freqs, smooth)
 
     def derivational_family_size(self, use_lemma=True):
-
         by_morpheme = {}
-
         for lemma in clx._lemmas:
             if len(lemma['Parses']) < 1:
                 continue  # no parses listed in Celex
@@ -309,9 +259,7 @@ class LexVars(Corpus):
                 self._dict[record]['derivational_family_size'] = 0
 
     def derivational_family_entropy(self, use_lemma=True):
-
         by_morpheme = {}
-
         for lemma in clx._lemmas:
             if len(lemma['Parses']) < 1:
                 continue
@@ -345,7 +293,6 @@ class LexVars(Corpus):
         # then p(x) * log(p(x)) = 0 in the definition of entropy)
         probs[probs == 0] = 1
         return -np.sum(probs * np.log2(probs))
-
 
 def debug():
     lex = LexVars(path_to_ds)

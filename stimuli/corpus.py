@@ -92,7 +92,7 @@ class Corpus(Mapping):
             if isinstance(copy_from, Corpus):
                 self._warning_msg(copy_from.name, copy_from, show_missing_items)
             else:
-                self._warning_msg(str(type(copy_from)), copy_from, show_missing_items)
+                self._warning_msg(str(copy_from), copy_from, show_missing_items)
         new_values = []
         for entry, exists in zip(self._dict, has_item):  # iterate over each item
             if exists:
@@ -107,7 +107,7 @@ class Corpus(Mapping):
         for column, i in zip(new_columns, xrange(len(columns))):
             self._append_column(column, columns[i])
 
-    def _warning_msg(self, func_name, comparison, show_missing_items):
+    def _warning_msg(self, func_name, comparison, show_missing_items=False):
         if show_missing_items:
             print "WARNING: the following items from %s were not found and were given a value of 'None':\n %s" \
                 % (func_name, self.compare_items(comparison, True)['not_in_comparison'])
