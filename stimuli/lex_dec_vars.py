@@ -140,7 +140,7 @@ class LexVars(Corpus):
             new_column.append(ratio)
         self._append_column(new_column, new_var)
 
-    def inflectional_entropy(self, smooth=1, verbose=False, use_lemma=True):
+    def inflectional_entropy(self, smooth=1, verbose=False):
         """This function collapses across all relevant lemmas, e.g. the noun
         "build" and the verb "build", or the various "wind" verbs.
 
@@ -181,14 +181,8 @@ class LexVars(Corpus):
         aches (plural), aches (3rd singular present),
         aching (participle), ached (past tense), ached (participles)
         """
-
         for record in self._dict:
-            if use_lemma:
-                item = self._dict[record]['lemma_headword']
-            else:
-                item = record
-                raise ValueError("use_lemma must be True.")
-            clx_lemmas = clx.lemma_lookup(item)
+            clx_lemmas = clx.lemma_lookup(self._dict[record]['lemma_headword'])
             # Use __builtin__ here in case sum is overshadowed by numpy
             all_wordforms = __builtin__.sum((clx.lemma_to_wordforms(clx_lemma)
                                              for clx_lemma in clx_lemmas), [])
@@ -225,17 +219,70 @@ class LexVars(Corpus):
             common = ['noun_plural', 'third_sg', 'part_ing', 'part_ed',
                       'past_tense', 'comparative', 'superlative']
             bare = ['bare_noun', 'bare_verb', 'positive', 'headword_form']
-            common_freqs = [counter[i] for i in common if i in counter]
-            bare_freqs = [counter[i] for i in bare if i in counter]
+            # the union of stemS, stemEd, and other = common
+            stemS = ['noun_plural', 'third_sg']
+            stemEd = ['past_tense', 'part_ed']
+            other = ['part_ing', 'comparative', 'superlative']
+            nouns = ['bare_noun', 'noun_plural']
+            verbs = ['bare_verb', 'third_sg', 'part_ing', 'part_ed', 'past_tense']
+
+            # frequency counts
+            f_common = {counter[i] for i in common if i in counter}
+            f_bare = {counter[i] for i in bare if i in counter}
+            f_stemS = {counter[i] for i in stemS if i in counter}
+            f_stemEd = {counter[i] for i in stemEd if i in counter}
+            f_other = {counter[i] for i in other if i in counter}
+            f_Vstem = {counter['bare_verb']}
+            f_VstemS = {counter['third_sg']}
+            f_nouns = {counter[i] for i in nouns if i in counter}
+            f_verbs = {counter[i] for i in verbs if i in counter}
 
             if verbose:
                 print counter
 
-            self._dict[record]['infl_ent_separate_bare'] = self.entropy(bare_freqs + common_freqs, smooth)
-            self._dict[record]['infl_ent_collapsed_bare'] = self.entropy([sum(bare_freqs)] + common_freqs, smooth)
-            self._dict[record]['infl_ent_no_bare'] = self.entropy(common_freqs, smooth)
+            # table of frequency distributions
+            dist = {
+                'separate_bare': f_bare | f_common,
+                'collapsed_bare': {sum(f_bare)} | f_common,
+                'no_bare': f_common,
+                'wordforms': {sum(f_bare)} | {sum(f_stemS)} | {sum(f_stemEd)} | f_other,
+                'affixed_wordforms': {sum(f_stemS)} | {sum(f_stemEd)} | f_other,
+                'stem': f_bare,
+                'stemS': f_stemS,
+                'stemAndstemS_pos': f_bare | f_stemS,
+                'stemAndstemS_wordforms': {sum(f_bare)} | {sum(f_stemS)},
+                'verbs': f_verbs,
+                'collapsed_NV': {sum(f_nouns)} | {sum(f_verbs)}
+            }
+            # calculate entropy measures from frequency distributions
+            H = {x: self.entropy(dist[x], smooth) for x in dist}
+            # calculate change in entropy from prior to posterior distribution
+            deltaH = {
+                'stem_pos': H['separate_bare'] - H['no_bare'],
+                'stem_wordforms': H['wordforms'] - H['affixed_wordforms'],
+                'Vstem_verbs': H['verbs'] - self.entropy(f_Vstem, smooth),
+                'stemS_all_pos': self.entropy(dist['separate_bare'] - dist['stemS'], smooth),
+                'stemS_affixes_pos': self.entropy(dist['no_bare'] - dist['stemS'], smooth),
+                'stemS_all_wordforms': self.entropy(dist['wordforms'] - {sum(dist['stemS'])}, smooth),
+                'stemS_affixes_wordforms': self.entropy(dist['affixed_wordforms'] - {sum(dist['stemS'])}, smooth),
+                'VstemS_verbs': H['verbs'] - self.entropy(f_VstemS, smooth)
+            }
+            ratioH = {
+                'verbs_all': H['verbs'] / float(H['separate_bare']),
+                'deltaVstem_deltaNVstem': deltaH['Vstem_verbs'] / float(deltaH['stem_pos']),
+                'deltaVstemS_deltaNVstemS': deltaH['VstemS_verbs'] / float(deltaH['stemS_all_pos'])
+            }
 
-    def derivational_family_size(self, use_lemma=True):
+            for group in [H, deltaH, ratioH]:
+                for measure in group:
+                    if group is H:
+                        self._dict[record]["H_" + measure] = group[measure]
+                    elif group is deltaH:
+                        self._dict[record]["deltaH_" + measure] = group[measure]
+                    elif group is ratioH:
+                        self._dict[record]["ratioH_" + measure] = group[measure]
+
+    def derivational_family_size(self):
         by_morpheme = {}
         for lemma in clx._lemmas:
             if len(lemma['Parses']) < 1:
@@ -247,18 +294,14 @@ class LexVars(Corpus):
                     by_morpheme.setdefault(morpheme, set()).add(lemma['Head'])
 
         for record in self._dict:
-            if use_lemma:
-                item = self._dict[record]['lemma_headword']
-            else:
-                item = record
-                raise ValueError("use_lemma must be True.")
+            item = self._dict[record]['lemma_headword']
             decompositions = by_morpheme.get(item)
             if decompositions is not None:
                 self._dict[record]['derivational_family_size'] = len(decompositions)
             else:
                 self._dict[record]['derivational_family_size'] = 0
 
-    def derivational_family_entropy(self, use_lemma=True):
+    def derivational_family_entropy(self):
         by_morpheme = {}
         for lemma in clx._lemmas:
             if len(lemma['Parses']) < 1:
@@ -269,11 +312,7 @@ class LexVars(Corpus):
                 by_morpheme.setdefault(morphemes[0], list()).append(lemma)
 
         for record in self._dict:
-            if use_lemma:
-                item = self._dict[record]['lemma_headword']
-            else:
-                item = record
-                raise ValueError("use_lemma must be True.")
+            item = self._dict[record]['lemma_headword']
             derived = by_morpheme.get(item)
             freqs = [x['Cob'] for x in derived]
             self._dict[record]['derivational_entropy'] = self.entropy(freqs)
@@ -285,6 +324,7 @@ class LexVars(Corpus):
         as plural ones, it's better to use [2, 1] as the "prior" instead of
         [1, 1]).
         """
+        freq_vec = list(freq_vec)  # change from set to list to add smoothing_constant
         vec = np.asarray(freq_vec, float) + smoothing_constant
         if sum(vec) == 0:
             return -1
@@ -296,5 +336,7 @@ class LexVars(Corpus):
 
 def debug():
     lex = LexVars(path_to_ds)
-    lex._append_column([w['Stem'] for w in lex], 'lemma_headword')  # b/c class method gets some headwords wrong
+    brit_spell = [w['Head'] for w in clx._lemmas]
+    lex.change_spelling('British', brit_spell)  # change to brit spelling
+    lex._append_column([lex[w]['Stem'] for w in lex], 'lemma_headword')  # b/c class method gets some headwords wrong
     return lex
