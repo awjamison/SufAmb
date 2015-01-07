@@ -17,6 +17,7 @@ import os
 import numpy as np
 from celex import Celex
 from corpus import Corpus
+from brit_spelling import change_spelling
 
 home = os.path.expanduser("~")
 path_to_ds = os.path.join(home, "Dropbox", "SufAmb", "all_subjects.csv")
@@ -181,6 +182,7 @@ class LexVars(Corpus):
         aches (plural), aches (3rd singular present),
         aching (participle), ached (past tense), ached (participles)
         """
+        get_fieldnames = True
         for record in self._dict:
             clx_lemmas = clx.lemma_lookup(self._dict[record]['lemma_headword'])
             # Use __builtin__ here in case sum is overshadowed by numpy
@@ -241,46 +243,57 @@ class LexVars(Corpus):
                 print counter
 
             # table of frequency distributions
-            dist = {
-                'separate_bare': f_bare | f_common,
-                'collapsed_bare': {sum(f_bare)} | f_common,
-                'no_bare': f_common,
-                'wordforms': {sum(f_bare)} | {sum(f_stemS)} | {sum(f_stemEd)} | f_other,
-                'affixed_wordforms': {sum(f_stemS)} | {sum(f_stemEd)} | f_other,
-                'stem': f_bare,
-                'stemS': f_stemS,
-                'stemAndstemS_pos': f_bare | f_stemS,
-                'stemAndstemS_wordforms': {sum(f_bare)} | {sum(f_stemS)},
-                'verbs': f_verbs,
-                'collapsed_NV': {sum(f_nouns)} | {sum(f_verbs)}
-            }
+            dist = [
+                ('separate_bare', f_bare | f_common),
+                ('collapsed_bare', {sum(f_bare)} | f_common),
+                ('no_bare', f_common),
+                ('wordforms', {sum(f_bare)} | {sum(f_stemS)} | {sum(f_stemEd)} | f_other),
+                ('affixed_wordforms', {sum(f_stemS)} | {sum(f_stemEd)} | f_other),
+                ('stem', f_bare),
+                ('stemS', f_stemS),
+                ('stemAndstemS_pos', f_bare | f_stemS),
+                ('stemAndstemS_wordforms', {sum(f_bare)} | {sum(f_stemS)}),
+                ('verbs', f_verbs),
+                ('collapsed_NV', {sum(f_nouns)} | {sum(f_verbs)})
+            ]
+            dist = collections.OrderedDict(dist)
             # calculate entropy measures from frequency distributions
-            H = {x: self.entropy(dist[x], smooth) for x in dist}
+            H = [(x, self.entropy(dist[x], smooth)) for x in dist]
+            H = collections.OrderedDict(H)
             # calculate change in entropy from prior to posterior distribution
-            deltaH = {
-                'stem_pos': H['separate_bare'] - H['no_bare'],
-                'stem_wordforms': H['wordforms'] - H['affixed_wordforms'],
-                'Vstem_verbs': H['verbs'] - self.entropy(f_Vstem, smooth),
-                'stemS_all_pos': self.entropy(dist['separate_bare'] - dist['stemS'], smooth),
-                'stemS_affixes_pos': self.entropy(dist['no_bare'] - dist['stemS'], smooth),
-                'stemS_all_wordforms': self.entropy(dist['wordforms'] - {sum(dist['stemS'])}, smooth),
-                'stemS_affixes_wordforms': self.entropy(dist['affixed_wordforms'] - {sum(dist['stemS'])}, smooth),
-                'VstemS_verbs': H['verbs'] - self.entropy(f_VstemS, smooth)
-            }
-            ratioH = {
-                'verbs_all': H['verbs'] / float(H['separate_bare']),
-                'deltaVstem_deltaNVstem': deltaH['Vstem_verbs'] / float(deltaH['stem_pos']),
-                'deltaVstemS_deltaNVstemS': deltaH['VstemS_verbs'] / float(deltaH['stemS_all_pos'])
-            }
+            deltaH = [
+                ('stem_pos', H['separate_bare'] - H['stem']),
+                ('stem_wordforms', H['wordforms'] - self.entropy({sum(dist['stem'])})),
+                ('Vstem_verbs', H['verbs'] - self.entropy(f_Vstem, smooth)),
+                ('stemS_all_pos', self.entropy(dist['separate_bare'] - dist['stemS'], smooth)),
+                ('stemS_affixes_pos', self.entropy(dist['no_bare'] - dist['stemS'], smooth)),
+                ('stemS_all_wordforms', self.entropy(dist['wordforms'] - {sum(dist['stemS'])}, smooth)),
+                ('stemS_affixes_wordforms', self.entropy(dist['affixed_wordforms'] - {sum(dist['stemS'])}, smooth)),
+                ('VstemS_verbs', H['verbs'] - self.entropy(f_VstemS, smooth))
+            ]
+            deltaH = collections.OrderedDict(deltaH)
+            ratioH = [
+                ('verbs_all', H['verbs'] / float(H['separate_bare'])),
+                ('deltaVstem_deltaNVstem', deltaH['Vstem_verbs'] / float(deltaH['stem_pos'])),
+                ('deltaVstemS_deltaNVstemS', deltaH['VstemS_verbs'] / float(deltaH['stemS_all_pos']))
+            ]
+            ratioH = collections.OrderedDict(ratioH)
 
             for group in [H, deltaH, ratioH]:
                 for measure in group:
                     if group is H:
                         self._dict[record]["H_" + measure] = group[measure]
+                        if get_fieldnames:
+                            self.fieldnames.append("H_" + measure)
                     elif group is deltaH:
                         self._dict[record]["deltaH_" + measure] = group[measure]
+                        if get_fieldnames:
+                            self.fieldnames.append("deltaH_" + measure)
                     elif group is ratioH:
                         self._dict[record]["ratioH_" + measure] = group[measure]
+                        if get_fieldnames:
+                            self.fieldnames.append("ratioH_" + measure)
+            get_fieldnames = False
 
     def derivational_family_size(self):
         by_morpheme = {}
@@ -300,6 +313,7 @@ class LexVars(Corpus):
                 self._dict[record]['derivational_family_size'] = len(decompositions)
             else:
                 self._dict[record]['derivational_family_size'] = 0
+        self.fieldnames.append('derivational_family_size')
 
     def derivational_family_entropy(self):
         by_morpheme = {}
@@ -316,6 +330,7 @@ class LexVars(Corpus):
             derived = by_morpheme.get(item)
             freqs = [x['Cob'] for x in derived]
             self._dict[record]['derivational_entropy'] = self.entropy(freqs)
+        self.fieldnames.append('derivational_entropy')
 
     def entropy(self, freq_vec, smoothing_constant=1):
         """This flat smoothing is an OK default but probably not the best idea:
@@ -338,5 +353,7 @@ def debug():
     lex = LexVars(path_to_ds)
     brit_spell = [w['Head'] for w in clx._lemmas]
     lex.change_spelling('British', brit_spell)  # change to brit spelling
-    lex._append_column([lex[w]['Stem'] for w in lex], 'lemma_headword')  # b/c class method gets some headwords wrong
+    stems = [lex[w]['Stem'] for w in lex]
+    stems = change_spelling(stems, 'British', brit_spell)
+    lex._append_column(stems, 'lemma_headword')  # b/c lemma_headword method gets some headwords wrong
     return lex
