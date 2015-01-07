@@ -284,15 +284,18 @@ class LexVars(Corpus):
                     if group is H:
                         self._dict[record]["H_" + measure] = group[measure]
                         if get_fieldnames:
-                            self.fieldnames.append("H_" + measure)
+                            if not measure in self.fieldnames:  # avoid duplicating fieldnames
+                                self.fieldnames.append("H_" + measure)
                     elif group is deltaH:
                         self._dict[record]["deltaH_" + measure] = group[measure]
                         if get_fieldnames:
-                            self.fieldnames.append("deltaH_" + measure)
+                            if not measure in self.fieldnames:
+                                self.fieldnames.append("deltaH_" + measure)
                     elif group is ratioH:
                         self._dict[record]["ratioH_" + measure] = group[measure]
                         if get_fieldnames:
-                            self.fieldnames.append("ratioH_" + measure)
+                            if not measure in self.fieldnames:
+                                self.fieldnames.append("ratioH_" + measure)
             get_fieldnames = False
 
     def derivational_family_size(self):
@@ -313,7 +316,8 @@ class LexVars(Corpus):
                 self._dict[record]['derivational_family_size'] = len(decompositions)
             else:
                 self._dict[record]['derivational_family_size'] = 0
-        self.fieldnames.append('derivational_family_size')
+        if not 'derivational_family_size' in self.fieldnames:
+            self.fieldnames.append('derivational_family_size')
 
     def derivational_family_entropy(self):
         by_morpheme = {}
@@ -330,7 +334,8 @@ class LexVars(Corpus):
             derived = by_morpheme.get(item)
             freqs = [x['Cob'] for x in derived]
             self._dict[record]['derivational_entropy'] = self.entropy(freqs)
-        self.fieldnames.append('derivational_entropy')
+        if not 'derivational_entropy' in self.fieldnames:
+            self.fieldnames.append('derivational_entropy')
 
     def entropy(self, freq_vec, smoothing_constant=1):
         """This flat smoothing is an OK default but probably not the best idea:
