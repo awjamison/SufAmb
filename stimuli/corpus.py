@@ -12,6 +12,7 @@ elpPath = path.join(corPath, "ELP", "ELPfull.csv")
 clxPath = path.join(corPath, "CELEX_V2")
 slxPath = path.join(corPath, "SUBTLEX-US.csv")
 aoaPath = path.join(corPath, "AoA.csv")
+varconPath = path.join(corPath, "varcon.txt")
 outPath = path.join(home, "Dropbox", "SufAmb", "this_is_a_test.csv")
 
 class Corpus(Mapping):
@@ -117,21 +118,25 @@ class Corpus(Mapping):
                   "Set 'verbose' to 'True' to see the list of items." % func_name
 
     def change_spelling(self, change_to, compare_to=None):
-        """Modifies the spelling of keys to American or British English.\n
-        Optional second argument constrains spelling conversions in the following way:\n
-        a key is changed only if the old spelling is not in the comparison object and the new\n
-        spelling is in the comparison object. This is useful if you want to minimally change\n
-        keys to match elements in the comparison object.\n
-        Note: it is possible to recover the original spelling of each key from its <item_name>\n
+        """Modifies the spelling of keys to American or British English.
+
+        Optional second argument constrains spelling conversions in the following way:
+        a key is changed only if the old spelling is not in the comparison object and the new
+        spelling is in the comparison object. This is useful if you want to minimally change
+        keys to match elements in the comparison object.
+
+        Note: it is possible to recover the original spelling of each key from its <item_name>
         value supplied in __init__.
         """
         from brit_spelling import get_translations
-        translations = get_translations(corPath)  # must be able to find this directory
-        new_sp = {x[change_to] for x in translations}
+        translations = get_translations(varconPath)  # must be able to find this directory
+        new_sp = {x[change_to] for x in translations}  # creates a set of spellings in the chosen dialect
         if change_to == 'American':
-            change_sp = {x['British']: x['American'] for x in translations}
+            change_sp = {x['British']: x['American'] for x in translations}  # British to American
+        elif change_to == 'British':
+            change_sp = {x['American']: x['British'] for x in translations}  # American to British
         else:
-            change_sp = {x['American']: x['British'] for x in translations}
+            raise ValueError("Unsupported dialect.")
         if compare_to is not None:
             # changes new_sp to union of new_sp and compare_to
             # changes change_sp to intersection of change_sp and compare_to
@@ -142,14 +147,15 @@ class Corpus(Mapping):
             new_sp.update(in_comparison)
             change_sp = {k: change_sp[k] for k in change_sp if change_sp[k] in in_comparison}
 
-        renamed = OrderedDict()
+        renamed = OrderedDict()  # new keys are created and values are copied from self._dict
         for entry in self._dict:
-            if entry in new_sp:
+            if entry in new_sp:  # don't change the spelling; it already matches an element in the new dialect
                 renamed[entry] = self._dict[entry]
-                continue  # avoid replacing a word when its spelling matches an item in the set of new spellings.
-            if entry in change_sp:
+            elif entry in change_sp:  # the spelling does not exist in the original dialect but a translation exists
                 spelling = change_sp[entry]
                 renamed[spelling] = self._dict[entry]
+            else:  # the word could not be found
+                renamed[entry] = self._dict[entry]
         self._dict = renamed
 
     def write(self, path):
