@@ -1,14 +1,7 @@
 __author__ = 'Andrew Jamison'
 # Adapted from Tal Linzen's LexVar class (https://github.com/TalLinzen/lexvars)
 
-# TODO: compute these variables
-# form_H_InfFam, form_H_affixes, NV_H_InfFam, NV_H_affixes, NV_stem_H
-# NVAdj_H_InfFam, NVAdj_H_affixes
-# Delta_H for all of the above, except NV_stem_H
-# V_H ratio, Delta_V_H ratio for all above
-# H_DerFam
-# NV Synset count, H for types and types+tokens
-# SUBTLEX, OLD20, AoA, transitivity, denominal/deverbal
+# TODO: add documentation
 
 import __builtin__
 import collections
@@ -187,7 +180,7 @@ class LexVars(Corpus):
             new_column.append(ratio)
         self._append_column(new_column, new_var)
 
-    def inflectional_entropy(self, use_subtlex=False, smooth=1, verbose=False):
+    def inflectional_entropy(self, use_subtlex=True, smooth=1, verbose=False):
         """This function collapses across all relevant lemmas, e.g. the noun
         "build" and the verb "build", or the various "wind" verbs.
 
@@ -303,6 +296,7 @@ class LexVars(Corpus):
             other = ['comparative', 'superlative']  # not currently used in SufAmb experiment
             nouns = ['bare_noun', 'noun_plural']
             verbs = ['bare_verb', 'third_sg', 'verb_ed', 'verb_ing']
+            adjectives = ['adj_ed', 'adj_ing']
 
             # frequency counts
             f_common = [counter[i] for i in common if i in counter]
@@ -311,9 +305,12 @@ class LexVars(Corpus):
             f_stemEd = [counter[i] for i in stemEd if i in counter]
             f_stemIng = [counter[i] for i in stemIng if i in counter]
             f_Vstem = [counter['bare_verb']]
+            f_Nstem = [counter['bare_noun']]
             f_VstemS = [counter['third_sg']]
+            f_NstemS = [counter['noun_plural']]
             f_nouns = [counter[i] for i in nouns if i in counter]
             f_verbs = [counter[i] for i in verbs if i in counter]
+            f_adjs = [counter[i] for i in adjectives if i in counter]
 
             if verbose:
                 print counter
@@ -327,10 +324,15 @@ class LexVars(Corpus):
                 ('affixed_wordforms', [sum(f_stemS)] + [sum(f_stemEd)] + [sum(f_stemIng)]),
                 ('stem', f_bare),
                 ('stemS', f_stemS),
+                ('stemEd', f_stemEd),
+                ('stemIng', f_stemIng),
                 ('stemAndstemS_pos', f_bare + f_stemS),
                 ('stemAndstemS_wordforms', [sum(f_bare)] + [sum(f_stemS)]),
                 ('verbs', f_verbs),
-                ('collapsed_NV', [sum(f_nouns)] + [sum(f_verbs)])
+                ('nouns', f_nouns),
+                ('adjectives', f_adjs),
+                ('collapsed_NV', [sum(f_nouns)] + [sum(f_verbs)]),
+                ('collapsed_pos', [sum(f_nouns)] + [sum(f_verbs)] + [sum(f_adjs)])
             ]
             dist = collections.OrderedDict(dist)
             # calculate entropy measures from frequency distributions
@@ -362,8 +364,25 @@ class LexVars(Corpus):
             ]
             ratioH = [('ratioH_'+x[0], x[1]) for x in ratioH]  # add 'ratioH' prefix
             ratioH = collections.OrderedDict(ratioH)
+            ratioFre = [
+                ('stem_lemma', sum(dist['stem']) / float(sum(dist['wordforms']))),
+                ('stemS_lemma', sum(dist['stemS']) / float(sum(dist['wordforms']))),
+                ('stemEd_lemma', sum(dist['stemEd']) / float(sum(dist['wordforms']))),
+                ('stemIng_lemma', sum(dist['stemIng']) / float(sum(dist['wordforms']))),
+                ('stemS_affixes', sum(dist['stemS']) / float(sum(dist['affixed_wordforms']))),
+                ('stemEd_affixes', sum(dist['stemEd']) / float(sum(dist['affixed_wordforms']))),
+                ('stemIng_affixes', sum(dist['stemIng']) / float(sum(dist['affixed_wordforms']))),
+                ('Vlemma_lemma', sum(dist['verbs']) / float(sum(dist['wordforms']))),
+                ('Nlemma_lemma', sum(dist['nouns']) / float(sum(dist['wordforms']))),
+                ('Vstem_Vlemma', f_Vstem[0] / float(sum(dist['verbs']))),
+                ('Nstem_Nlemma', f_Nstem[0] / float(sum(dist['nouns']))),
+                ('VstemS_Vlemma', f_VstemS[0] / float(sum(dist['verbs']))),
+                ('NstemS_Nlemma', f_NstemS[0] / float(sum(dist['nouns'])))
+            ]
+            ratioFre = [('ratioFre_'+x[0], x[1]) for x in ratioFre]  # add 'ratioFre' prefix
+            ratioFre = collections.OrderedDict(ratioFre)
 
-            for group in [H, deltaH, ratioH]:
+            for group in [H, deltaH, ratioH, ratioFre]:
                 for measure in group:
                     self._dict[record][measure] = group[measure]
                     if get_fieldnames:
@@ -438,14 +457,36 @@ def debug():
     stems = [lex[w]['Stem'] for w in lex]
     stems = change_spelling(stems, 'British', brit_spell)
     lex._append_column(stems, 'lemma_headword')  # b/c lemma_headword method gets some headwords wrong
+    # test all methods that create new variables
+    lex.wordnet_synsets()
+    lex.synset_ratio()
+    lex.age_of_acquisition()
+    lex.levenshtein_distance()
+    lex.subtitles()
+    lex.subtlex_verb_ratio()
+    lex.inflectional_entropy()
+    lex.derivational_family_size()
+    lex.derivational_family_entropy()
     return lex
 
-def test_corrs(return_lists=True):
-    l1, l2 = debug(), debug()
-    l1.inflectional_entropy(False)
-    l2.inflectional_entropy(True)
-    compare = [[l1[x]['H_stem'] for x in l1], [l2[y]['H_stem'] for y in l2]]
-    if return_lists:
-        return l1, l2
-    else:
-        return np.corrcoef(compare)
+def test_corrs(measure, lexvars_objects=None):
+    """Tests correlations between entropy measures calculated using CELEX and SUBTLEX.
+
+    This demonstrates how small some of the correlations are!
+    """
+    if lexvars_objects is None:  # create the LexVars objects
+        lex = LexVars(path_to_ds)
+        brit_spell = [w['Word'] for w in clx._wordforms]
+        lex.change_spelling('British', brit_spell)  # change to brit spelling
+        stems = [lex[w]['Stem'] for w in lex]
+        stems = change_spelling(stems, 'British', brit_spell)
+        lex._append_column(stems, 'lemma_headword')
+        lexs = (lex, lex)
+    else:  # use already instantiated LexVars objects
+        lexs = lexvars_objects
+
+    l1, l2 = lexs
+    l1.inflectional_entropy(use_subtlex=False)
+    l2.inflectional_entropy(use_subtlex=True)
+    compare = [[l1[x][measure] for x in l1], [l2[y][measure] for y in l2]]
+    return np.corrcoef(compare)
