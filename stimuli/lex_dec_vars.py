@@ -13,7 +13,7 @@ from corpus import Corpus
 from brit_spelling import change_spelling
 
 home = os.path.expanduser("~")
-path_to_ds = os.path.join(home, "Dropbox", "SufAmb", "all_subjects.csv")
+path_to_ds = os.path.join(home, "Dropbox", "SufAmb", "master_list35_update4.csv")
 corPath = os.path.join(home, "Dropbox", "corpora")
 elpPath = os.path.join(corPath, "ELP", "ELPfull.csv")
 slxPath = os.path.join(corPath, "SUBTLEX-US.csv")
@@ -134,7 +134,7 @@ class LexVars(Corpus):
             new_column.append(ratio)
         self._append_column(new_column, new_var)
 
-    def get_subtlex_freq(self, word, part_of_speech=None, raw_freq=False, warning=False):
+    def get_subtlex_freq(self, word, part_of_speech=None, log_freq=False, warning=False):
         """Returns count per million from SUBTLEX.
 
         When part of speech is specified in the optional second argument,
@@ -145,10 +145,10 @@ class LexVars(Corpus):
         one has reason to believe that all parts of speech after the second
         contribute negligibly to the total frequency count for the word.
         """
-        if raw_freq:
-            total_freq = float(slx[word]['FREQcount'])  # count in corpus
-        else:
+        if log_freq:
             total_freq = float(slx[word]['Lg10WF'])  # log10 count per million
+        else:
+            total_freq = float(slx[word]['SUBTLWF'])  # count per million
         perc_dom = float(slx[word]['Percentage_dom_PoS'])
         categories = slx[word]['All_PoS_SUBTLEX'].split('.')
         if part_of_speech is None:
@@ -164,7 +164,7 @@ class LexVars(Corpus):
                   "'0' returned instead." % part_of_speech
         return 0
 
-    def subtlex_verb_ratio(self, raw_freq=True):
+    def subtlex_verb_ratio(self, log_freq=False):
         new_var = "slx_v_ratio"
         has_item = self.compare_items(slx)
         new_column = []
@@ -172,8 +172,8 @@ class LexVars(Corpus):
             self._warning_msg('subtlex_verb_ratio', slx)
         for record, exists in zip(self._dict, has_item):
             if exists:
-                total_freq = self.get_subtlex_freq(record, raw_freq=raw_freq)
-                verb_freq = self.get_subtlex_freq(record, 'Verb', raw_freq=raw_freq)
+                total_freq = self.get_subtlex_freq(record, log_freq=log_freq)
+                verb_freq = self.get_subtlex_freq(record, 'Verb', log_freq=log_freq)
                 ratio = verb_freq / float(total_freq)
             else:
                 ratio = None
@@ -233,7 +233,7 @@ class LexVars(Corpus):
 
             for wf in all_wordforms:
                 infl = wf.FlectType
-                clx_freq = wf.Cob
+                clx_freq = wf.Cob  # huge rounding error with freq/million, so just use raw count
                 if use_subtlex:
                     if False in [w.Word in slx for w in all_wordforms]:
                         # not all members of an inflectional family could be found in SUBTLEX.
@@ -245,55 +245,46 @@ class LexVars(Corpus):
 
                 if infl[0] == 'present_tense' and infl[1] != '3rd_person_verb' or infl[0] == 'infinitive':
                     if use_subtlex and all_flects_in_subtlex:
-                        counter['bare_verb'] += self.get_subtlex_freq(wf.Word, 'Verb')
+                        counter['bare_verb'] = self.get_subtlex_freq(wf.Word, 'Verb')
                     else:
                         counter['bare_verb'] += clx_freq
                 if infl[0] == 'singular':
                     if use_subtlex and all_flects_in_subtlex:
-                        counter['bare_noun'] += self.get_subtlex_freq(wf.Word, 'Noun')
+                        counter['bare_noun'] = self.get_subtlex_freq(wf.Word, 'Noun')
                     else:
                         counter['bare_noun'] += clx_freq
                 if infl[0] == 'plural':
                     if use_subtlex and all_flects_in_subtlex:
-                        counter['noun_plural'] += self.get_subtlex_freq(wf.Word, 'Noun')
+                        counter['noun_plural'] = self.get_subtlex_freq(wf.Word, 'Noun')
                     else:
                         counter['noun_plural'] += clx_freq
                 if infl == ['present_tense', '3rd_person_verb', 'singular']:
                     if use_subtlex and all_flects_in_subtlex:
-                        counter['third_sg'] += self.get_subtlex_freq(wf.Word, 'Verb')
+                        counter['third_sg'] = self.get_subtlex_freq(wf.Word, 'Verb')
                     else:
                         counter['third_sg'] += clx_freq
-                if not use_subtlex:  # these notations are not used in SUBTLEX
-                    if infl == ['positive']:
-                        counter['positive'] += clx_freq
-                    if infl == ['comparative']:
-                        counter['comparative'] += clx_freq
-                    if infl == ['superlative']:
-                        counter['superlative'] += clx_freq
-                    if infl == ['headword_form']:
-                        counter['headword_form'] += clx_freq
                 if infl == ['participle', 'present_tense']:
                     if use_subtlex and all_flects_in_subtlex:
-                        counter['verb_ing'] += self.get_subtlex_freq(wf.Word, 'Verb')
-                        counter['adj_ing'] += self.get_subtlex_freq(wf.Word, 'Adjective')
+                        counter['verb_ing'] = self.get_subtlex_freq(wf.Word, 'Verb')
+                        counter['adj_ing'] = self.get_subtlex_freq(wf.Word, 'Adjective')
                     else:
                         counter['verb_ing'] += clx_freq
                 # past participle and past tense are collapsed, so doesn't work for irregulars
                 if infl == ['participle', 'past_tense'] or infl[0] == 'past_tense':
                     if use_subtlex and all_flects_in_subtlex:
-                        counter['verb_ed'] += self.get_subtlex_freq(wf.Word, 'Verb')
-                        counter['adj_ed'] += self.get_subtlex_freq(wf.Word, 'Adjective')
+                        counter['verb_ed'] = self.get_subtlex_freq(wf.Word, 'Verb')
+                        counter['adj_ed'] = self.get_subtlex_freq(wf.Word, 'Adjective')
                     else:
                         counter['verb_ed'] += clx_freq
 
-            common = ['noun_plural', 'third_sg', 'verb_ing', 'adj_ing', 'verb_ed', 'adj_ed'
-                      'comparative', 'superlative']
-            bare = ['bare_noun', 'bare_verb', 'positive', 'headword_form']
-            # stemS | stemEd | stemIng | other == common
+            counter = {k: counter[k] * 1000 for k in counter}  # after freqs are tallied, multiply all freqs by 1000
+
+            common = ['noun_plural', 'third_sg', 'verb_ing', 'adj_ing', 'verb_ed', 'adj_ed']
+            bare = ['bare_noun', 'bare_verb']
+            # stemS | stemEd | stemIng | == common
             stemS = ['noun_plural', 'third_sg']
             stemEd = ['verb_ed', 'adj_ed']
             stemIng = ['verb_ing', 'adj_ing']
-            other = ['comparative', 'superlative']  # not currently used in SufAmb experiment
             nouns = ['bare_noun', 'noun_plural']
             verbs = ['bare_verb', 'third_sg', 'verb_ed', 'verb_ing']
             adjectives = ['adj_ed', 'adj_ing']
@@ -354,9 +345,11 @@ class LexVars(Corpus):
                 name = measure[0]
                 prior_dist = measure[1][0]
                 posterior_dist = measure[1][1]
-                for type_freq in posterior_dist:
-                    prior_dist.remove(type_freq)  # results in {prior} / {posterior}
-                deltaH['deltaH_'+name] = -self.entropy(prior_dist, smooth)  # negative sign for entropy reduction
+                difference = []  # difference = {prior} - {posterior}
+                for type_freq in prior_dist:
+                    if type_freq not in posterior_dist:
+                        difference.append(type_freq)
+                deltaH['deltaH_'+name] = -self.entropy(difference, smooth)  # negative sign for entropy reduction
             ratioH = [
                 ('verbs_all', H['H_verbs'] / float(H['H_separate_bare'])),
                 ('deltaVstem_deltaNVstem', deltaH['deltaH_Vstem_verbs'] / float(deltaH['deltaH_stem_pos'])),
@@ -364,23 +357,36 @@ class LexVars(Corpus):
             ]
             ratioH = [('ratioH_'+x[0], x[1]) for x in ratioH]  # add 'ratioH' prefix
             ratioH = collections.OrderedDict(ratioH)
+            lemma_total = float(sum(dist['wordforms']))
+            affixes_total = float(sum(dist['affixed_wordforms']))
+            verbs_total = float(sum(dist['verbs']))
+            nouns_total = float(sum(dist['nouns']))
             ratioFre = [
-                ('stem_lemma', sum(dist['stem']) / float(sum(dist['wordforms']))),
-                ('stemS_lemma', sum(dist['stemS']) / float(sum(dist['wordforms']))),
-                ('stemEd_lemma', sum(dist['stemEd']) / float(sum(dist['wordforms']))),
-                ('stemIng_lemma', sum(dist['stemIng']) / float(sum(dist['wordforms']))),
-                ('stemS_affixes', sum(dist['stemS']) / float(sum(dist['affixed_wordforms']))),
-                ('stemEd_affixes', sum(dist['stemEd']) / float(sum(dist['affixed_wordforms']))),
-                ('stemIng_affixes', sum(dist['stemIng']) / float(sum(dist['affixed_wordforms']))),
-                ('Vlemma_lemma', sum(dist['verbs']) / float(sum(dist['wordforms']))),
-                ('Nlemma_lemma', sum(dist['nouns']) / float(sum(dist['wordforms']))),
-                ('Vstem_Vlemma', f_Vstem[0] / float(sum(dist['verbs']))),
-                ('Nstem_Nlemma', f_Nstem[0] / float(sum(dist['nouns']))),
-                ('VstemS_Vlemma', f_VstemS[0] / float(sum(dist['verbs']))),
-                ('NstemS_Nlemma', f_NstemS[0] / float(sum(dist['nouns'])))
+                ('stem_lemma', sum(dist['stem']) / lemma_total),
+                ('stemS_lemma', sum(dist['stemS']) / lemma_total),
+                ('stemEd_lemma', sum(dist['stemEd']) / lemma_total),
+                ('stemIng_lemma', sum(dist['stemIng']) / lemma_total),
+                ('stemS_affixes', sum(dist['stemS']) / affixes_total),
+                ('stemEd_affixes', sum(dist['stemEd']) / affixes_total),
+                ('stemIng_affixes', sum(dist['stemIng']) / affixes_total),
+                ('Vlemma_lemma', verbs_total / lemma_total),
+                ('Nlemma_lemma', nouns_total / lemma_total)
             ]
+            if verbs_total == 0:  # avoid dividing by zero
+                ratioFre.append(('Vstem_Vlemma', 0))
+                ratioFre.append(('VstemS_Vlemma', 0))
+            else:
+                ratioFre.append(('Vstem_Vlemma', f_Vstem[0] / verbs_total))
+                ratioFre.append(('VstemS_Vlemma', f_VstemS[0] / verbs_total))
+            if nouns_total == 0:
+                ratioFre.append(('Nstem_Nlemma', 0))
+                ratioFre.append(('NstemS_Nlemma', 0))
+            else:
+                ratioFre.append(('Nstem_Nlemma', f_Nstem[0] / nouns_total))
+                ratioFre.append(('NstemS_Nlemma', f_NstemS[0] / nouns_total))
             ratioFre = [('ratioFre_'+x[0], x[1]) for x in ratioFre]  # add 'ratioFre' prefix
             ratioFre = collections.OrderedDict(ratioFre)
+            ratioFre['Lg10LemmaFre'] = np.log10(sum(dist['wordforms']))  # combined lemma (stem) freq
 
             for group in [H, deltaH, ratioH, ratioFre]:
                 for measure in group:
