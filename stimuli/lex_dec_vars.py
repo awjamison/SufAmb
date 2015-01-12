@@ -449,7 +449,7 @@ class LexVars(Corpus):
         freq_vec = list(freq_vec)  # change from set to list to add smoothing_constant
         vec = np.asarray(freq_vec, float) + smoothing_constant
         if sum(vec) == 0:
-            return -1
+            return 0  # the event does not occur
         probs = vec / sum(vec)
         # Make sure we're not taking the log of 0 (by convention if p(x) = 0
         # then p(x) * log(p(x)) = 0 in the definition of entropy)
@@ -458,24 +458,26 @@ class LexVars(Corpus):
 
 def debug():
     lex = LexVars(path_to_ds)
-    brit_spell = [w['Word'] for w in clx._wordforms]
-    lex.change_spelling('British', brit_spell)  # change to brit spelling
-    stems = [lex[w]['Stem'] for w in lex]
-    stems = change_spelling(stems, 'British', brit_spell)
-    lex._append_column(stems, 'lemma_headword')  # b/c lemma_headword method gets some headwords wrong
-    # test all methods that create new variables
+
+    # test all methods that use corpora with American spellings
     lex.wordnet_synsets()
     lex.synset_ratio()
     lex.age_of_acquisition()
     lex.levenshtein_distance()
     lex.subtitles()
     lex.subtlex_verb_ratio()
+
+    # test all methods that use CELEX with British spelling
+    brit_spell = [w['Word'] for w in clx._wordforms]
+    stems = [lex[w]['Stem'] for w in lex]
+    stems = change_spelling(stems, 'British', brit_spell)
+    lex._append_column(stems, 'lemma_headword')  # b/c lemma_headword method gets some headwords wrong
     lex.inflectional_entropy()
     lex.derivational_family_size()
     lex.derivational_family_entropy()
     return lex
 
-def test_corrs(measure, lexvars_objects=None):
+def test_corr(measure, lexvars_objects=None):
     """Tests correlations between entropy measures calculated using CELEX and SUBTLEX.
 
     This demonstrates how small some of the correlations are!
@@ -487,12 +489,22 @@ def test_corrs(measure, lexvars_objects=None):
         stems = [lex[w]['Stem'] for w in lex]
         stems = change_spelling(stems, 'British', brit_spell)
         lex._append_column(stems, 'lemma_headword')
-        lexs = (lex, lex)
+        lexs = (lex.inflectional_entropy(use_subtlex=True), lex.inflectional_entropy(use_subtlex=False))
     else:  # use already instantiated LexVars objects
         lexs = lexvars_objects
 
     l1, l2 = lexs
-    l1.inflectional_entropy(use_subtlex=False)
-    l2.inflectional_entropy(use_subtlex=True)
     compare = [[l1[x][measure] for x in l1], [l2[y][measure] for y in l2]]
     return np.corrcoef(compare)
+
+test_measures = ['H_separate_bare', 'H_collapsed_bare', 'H_no_bare', 'H_wordforms', 'H_affixed_wordforms',
+                 'H_stem', 'H_stemS', 'H_stemEd', 'H_stemIng', 'H_stemAndstemS_pos', 'H_stemAndstemS_wordforms',
+                 'H_verbs', 'H_nouns', 'H_adjectives', 'H_collapsed_NV', 'H_collapsed_pos',
+                 'ratioFre_stem_lemma', 'ratioFre_stemS_lemma', 'ratioFre_stemEd_lemma', 'ratioFre_stemIng_lemma',
+                 'ratioFre_stemS_affixes', 'ratioFre_stemEd_affixes', 'ratioFre_stemIng_affixes',
+                 'ratioFre_Vlemma_lemma', 'ratioFre_Vstem_Vlemma', 'ratioFre_VstemS_Vlemma',
+                 'ratioFre_Nlemma_lemma', 'ratioFre_Nstem_Nlemma', 'ratioFre_NstemS_Nlemma'
+                 ]
+
+def test_corrs(measures, lexvars_objects=None):
+    return {measure: test_corr(measure, lexvars_objects) for measure in measures}
