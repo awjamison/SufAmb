@@ -6,7 +6,7 @@ import csv
 
 # some helpful directories
 home = path.expanduser("~")
-expPath = path.join(home, "Dropbox", "SufAmb", "master_list35_update3.csv")  # path to custom list; edit
+expPath = path.join(home, "Dropbox", "SufAmb", "master_list35_update3_words.csv")  # path to custom list; edit
 corPath = path.join(home, "Dropbox", "corpora")  # path to corpora; edit
 elpPath = path.join(corPath, "ELP", "ELPfull.csv")
 clxPath = path.join(corPath, "CELEX_V2")

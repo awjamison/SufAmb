@@ -13,7 +13,7 @@ from corpus import Corpus
 from brit_spelling import change_spelling
 
 home = os.path.expanduser("~")
-path_to_ds = os.path.join(home, "Dropbox", "SufAmb", "master_list35_update4.csv")
+path_to_ds = os.path.join(home, "Dropbox", "SufAmb", "master_list35_update3_words.csv")  # no nonwords
 corPath = os.path.join(home, "Dropbox", "corpora")
 elpPath = os.path.join(corPath, "ELP", "ELPfull.csv")
 slxPath = os.path.join(corPath, "SUBTLEX-US.csv")
@@ -361,6 +361,9 @@ class LexVars(Corpus):
             affixes_total = float(sum(dist['affixed_wordforms']))
             verbs_total = float(sum(dist['verbs']))
             nouns_total = float(sum(dist['nouns']))
+            stem_total = float(sum(dist['stem']))
+            stemS_total = float(sum(dist['stemS']))
+            # this comprises the simple transition probabilities
             ratioFre = [
                 ('stem_lemma', sum(dist['stem']) / lemma_total),
                 ('stemS_lemma', sum(dist['stemS']) / lemma_total),
@@ -370,7 +373,11 @@ class LexVars(Corpus):
                 ('stemEd_affixes', sum(dist['stemEd']) / affixes_total),
                 ('stemIng_affixes', sum(dist['stemIng']) / affixes_total),
                 ('Vlemma_lemma', verbs_total / lemma_total),
-                ('Nlemma_lemma', nouns_total / lemma_total)
+                ('Nlemma_lemma', nouns_total / lemma_total),
+                ('Vstem_lemma', f_Vstem[0] / lemma_total),
+                ('VstemS_lemma', f_VstemS[0] / lemma_total),
+                ('Nstem_lemma', f_Nstem[0] / lemma_total),
+                ('NstemS_lemma', f_NstemS[0] / lemma_total)
             ]
             if verbs_total == 0:  # avoid dividing by zero
                 ratioFre.append(('Vstem_Vlemma', 0))
@@ -384,13 +391,45 @@ class LexVars(Corpus):
             else:
                 ratioFre.append(('Nstem_Nlemma', f_Nstem[0] / nouns_total))
                 ratioFre.append(('NstemS_Nlemma', f_NstemS[0] / nouns_total))
+            if stem_total == 0:
+                ratioFre.append(('Vstem_stem', 0))
+                ratioFre.append(('Nstem_stem', 0))
+            else:
+                ratioFre.append(('Vstem_stem', f_Vstem[0] / stem_total))
+                ratioFre.append(('Nstem_stem', f_Nstem[0] / stem_total))
+            if stemS_total == 0:
+                ratioFre.append(('VstemS_stemS', 0))
+                ratioFre.append(('NstemS_stemS', 0))
+            else:
+                ratioFre.append(('VstemS_stemS', f_VstemS[0] / stemS_total))
+                ratioFre.append(('NstemS_stemS', f_NstemS[0] / stemS_total))
             ratioFre = [('ratioFre_'+x[0], x[1]) for x in ratioFre]  # add 'ratioFre' prefix
             ratioFre = collections.OrderedDict(ratioFre)
-            ratioFre['Lg10LemmaFre'] = np.log10(sum(dist['wordforms']))  # combined lemma (stem) freq
+            ratioFre['Lg10LemmaFre'] = np.log10(sum(dist['wordforms']))  # TODO move this to a more logical place
+            # this comprises the transition probabilities with multiple transitions
+            transitions = [
+                ('Vstem_Vlemma_lemma', (ratioFre['ratioFre_Vstem_Vlemma'], ratioFre['ratioFre_Vlemma_lemma'])),
+                ('Vstem_stem_lemma', (ratioFre['ratioFre_Vstem_stem'], ratioFre['ratioFre_stem_lemma'])),
+                ('VstemS_Vlemma_lemma', (ratioFre['ratioFre_VstemS_Vlemma'], ratioFre['ratioFre_Vlemma_lemma'])),
+                ('VstemS_stemS_lemma', (ratioFre['ratioFre_VstemS_stemS'], ratioFre['ratioFre_stemS_lemma'])),
+                ('Nstem_Nlemma_lemma', (ratioFre['ratioFre_Nstem_Nlemma'], ratioFre['ratioFre_Nlemma_lemma'])),
+                ('Nstem_stem_lemma', (ratioFre['ratioFre_Nstem_stem'], ratioFre['ratioFre_stem_lemma'])),
+                ('NstemS_Nlemma_lemma', (ratioFre['ratioFre_NstemS_Nlemma'], ratioFre['ratioFre_Nlemma_lemma'])),
+                ('NstemS_stemS_lemma', (ratioFre['ratioFre_NstemS_stemS'], ratioFre['ratioFre_stemS_lemma']))
+            ]
+            TP = [('TP_'+x[0], x[1][0] * x[1][1]) for x in transitions]
+            TP = collections.OrderedDict(TP)
+            amb = [
 
-            for group in [H, deltaH, ratioH, ratioFre]:
+            ]
+
+            for group in [H, deltaH, ratioH, ratioFre, TP]:
                 for measure in group:
-                    self._dict[record][measure] = group[measure]
+                    if use_subtlex:
+                        prefix = 'slx'  # add prefix to indicate which corpus was used
+                    else:
+                        prefix = 'clx'
+                    self._dict[record][prefix + '_' + measure] = group[measure]
                     if get_fieldnames:
                         if not measure in self.fieldnames:  # avoid duplicating fieldnames
                             self.fieldnames.append(measure)
@@ -434,8 +473,11 @@ class LexVars(Corpus):
         for record in self._dict:
             item = self._dict[record]['lemma_headword']
             derived = by_morpheme.get(item)
-            freqs = [x['Cob'] for x in derived]
-            self._dict[record]['derivational_entropy'] = self.entropy(freqs)
+            if derived is not None:
+                freqs = [x['Cob'] for x in derived]
+                self._dict[record]['derivational_entropy'] = self.entropy(freqs)
+            else:
+                self._dict[record]['derivational_entropy'] = 0
         if not 'derivational_entropy' in self.fieldnames:
             self.fieldnames.append('derivational_entropy')
 
