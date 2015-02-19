@@ -363,47 +363,31 @@ class LexVars(Corpus):
             nouns_total = float(sum(dist['nouns']))
             stem_total = float(sum(dist['stem']))
             stemS_total = float(sum(dist['stemS']))
-            # this comprises the simple transition probabilities
-            ratioFre = [
-                ('stem_lemma', sum(dist['stem']) / lemma_total),
-                ('stemS_lemma', sum(dist['stemS']) / lemma_total),
-                ('stemEd_lemma', sum(dist['stemEd']) / lemma_total),
-                ('stemIng_lemma', sum(dist['stemIng']) / lemma_total),
-                ('stemS_affixes', sum(dist['stemS']) / affixes_total),
-                ('stemEd_affixes', sum(dist['stemEd']) / affixes_total),
-                ('stemIng_affixes', sum(dist['stemIng']) / affixes_total),
-                ('Vlemma_lemma', verbs_total / lemma_total),
-                ('Nlemma_lemma', nouns_total / lemma_total),
-                ('Vstem_lemma', f_Vstem[0] / lemma_total),
-                ('VstemS_lemma', f_VstemS[0] / lemma_total),
-                ('Nstem_lemma', f_Nstem[0] / lemma_total),
-                ('NstemS_lemma', f_NstemS[0] / lemma_total)
+            # this comprises the simple transition probabilities (surprisal ratios)
+            ratios = [
+                ('stem_lemma', (sum(dist['stem']), lemma_total)),
+                ('stemS_lemma', (sum(dist['stemS']), lemma_total)),
+                ('stemEd_lemma', (sum(dist['stemEd']), lemma_total)),
+                ('stemIng_lemma', (sum(dist['stemIng']), lemma_total)),
+                ('stemS_affixes', (sum(dist['stemS']), affixes_total)),
+                ('stemEd_affixes', (sum(dist['stemEd']), affixes_total)),
+                ('stemIng_affixes', (sum(dist['stemIng']), affixes_total)),
+                ('Vlemma_lemma', (verbs_total, lemma_total)),
+                ('Nlemma_lemma', (nouns_total, lemma_total)),
+                ('Vstem_lemma', (f_Vstem[0], lemma_total)),
+                ('VstemS_lemma', (f_VstemS[0], lemma_total)),
+                ('Nstem_lemma', (f_Nstem[0], lemma_total)),
+                ('NstemS_lemma', (f_NstemS[0], lemma_total)),
+                ('Vstem_Vlemma', (f_Vstem[0], verbs_total)),
+                ('VstemS_Vlemma', (f_VstemS[0], verbs_total)),
+                ('Nstem_Nlemma', (f_Nstem[0], nouns_total)),
+                ('NstemS_Nlemma', (f_NstemS[0], nouns_total)),
+                ('Vstem_stem', (f_Vstem[0], stem_total)),
+                ('Nstem_stem', (f_Nstem[0], stem_total)),
+                ('VstemS_stemS', (f_VstemS[0], stemS_total)),
+                ('NstemS_stemS', (f_NstemS[0], stemS_total))
             ]
-            if verbs_total == 0:  # avoid dividing by zero
-                ratioFre.append(('Vstem_Vlemma', 0))
-                ratioFre.append(('VstemS_Vlemma', 0))
-            else:
-                ratioFre.append(('Vstem_Vlemma', f_Vstem[0] / verbs_total))
-                ratioFre.append(('VstemS_Vlemma', f_VstemS[0] / verbs_total))
-            if nouns_total == 0:
-                ratioFre.append(('Nstem_Nlemma', 0))
-                ratioFre.append(('NstemS_Nlemma', 0))
-            else:
-                ratioFre.append(('Nstem_Nlemma', f_Nstem[0] / nouns_total))
-                ratioFre.append(('NstemS_Nlemma', f_NstemS[0] / nouns_total))
-            if stem_total == 0:
-                ratioFre.append(('Vstem_stem', 0))
-                ratioFre.append(('Nstem_stem', 0))
-            else:
-                ratioFre.append(('Vstem_stem', f_Vstem[0] / stem_total))
-                ratioFre.append(('Nstem_stem', f_Nstem[0] / stem_total))
-            if stemS_total == 0:
-                ratioFre.append(('VstemS_stemS', 0))
-                ratioFre.append(('NstemS_stemS', 0))
-            else:
-                ratioFre.append(('VstemS_stemS', f_VstemS[0] / stemS_total))
-                ratioFre.append(('NstemS_stemS', f_NstemS[0] / stemS_total))
-            ratioFre = [('ratioFre_'+x[0], x[1]) for x in ratioFre]  # add 'ratioFre' prefix
+            ratioFre = [('ratioFre_'+x[0], self.surprisal(x[1][0], x[1][1])) for x in ratios]
             ratioFre = collections.OrderedDict(ratioFre)
             ratioFre['Lg10LemmaFre'] = np.log10(sum(dist['wordforms']))  # TODO move this to a more logical place
             # this comprises the transition probabilities with multiple transitions
@@ -419,9 +403,6 @@ class LexVars(Corpus):
             ]
             TP = [('TP_'+x[0], x[1][0] * x[1][1]) for x in transitions]
             TP = collections.OrderedDict(TP)
-            amb = [
-
-            ]
 
             for group in [H, deltaH, ratioH, ratioFre, TP]:
                 for measure in group:
@@ -497,6 +478,14 @@ class LexVars(Corpus):
         # then p(x) * log(p(x)) = 0 in the definition of entropy)
         probs[probs == 0] = 1
         return -np.sum(probs * np.log2(probs))
+
+    def surprisal(self, a, b):
+        """Calculates p(a | b) where A is a subset of B
+        """
+        if b == 0:
+            return 0
+        else:
+            return a / float(b)
 
 def debug():
     lex = LexVars(path_to_ds)
