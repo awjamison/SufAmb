@@ -180,7 +180,7 @@ class LexVars(Corpus):
             new_column.append(ratio)
         self._append_column(new_column, new_var)
 
-    def inflectional_entropy(self, use_subtlex=True, smooth=1, verbose=False):
+    def inflectional_entropy(self, use_subtlex=True, smooth=1):
         """This function collapses across all relevant lemmas, e.g. the noun
         "build" and the verb "build", or the various "wind" verbs.
 
@@ -279,9 +279,8 @@ class LexVars(Corpus):
 
             counter = {k: counter[k] * 1000 for k in counter}  # after freqs are tallied, multiply all freqs by 1000
 
-            common = ['noun_plural', 'third_sg', 'verb_ing', 'adj_ing', 'verb_ed', 'adj_ed']
-            bare = ['bare_noun', 'bare_verb']
-            # stemS | stemEd | stemIng | == common
+            affixes = ['noun_plural', 'third_sg', 'verb_ing', 'adj_ing', 'verb_ed', 'adj_ed']
+            stem = ['bare_noun', 'bare_verb']
             stemS = ['noun_plural', 'third_sg']
             stemEd = ['verb_ed', 'adj_ed']
             stemIng = ['verb_ing', 'adj_ing']
@@ -290,8 +289,8 @@ class LexVars(Corpus):
             adjectives = ['adj_ed', 'adj_ing']
 
             # frequency counts
-            f_common = [counter[i] for i in common if i in counter]
-            f_bare = [counter[i] for i in bare if i in counter]
+            f_affixes = [counter[i] for i in affixes if i in counter]
+            f_stem = [counter[i] for i in stem if i in counter]
             f_stemS = [counter[i] for i in stemS if i in counter]
             f_stemEd = [counter[i] for i in stemEd if i in counter]
             f_stemIng = [counter[i] for i in stemIng if i in counter]
@@ -303,22 +302,16 @@ class LexVars(Corpus):
             f_verbs = [counter[i] for i in verbs if i in counter]
             f_adjs = [counter[i] for i in adjectives if i in counter]
 
-            if verbose:
-                print counter
-
             # table of frequency distributions
             dist = [
-                ('separate_bare', f_bare + f_common),
-                ('collapsed_bare', [sum(f_bare)] + f_common),
-                ('no_bare', f_common),
-                ('wordforms', [sum(f_bare)] + [sum(f_stemS)] + [sum(f_stemEd)] + [sum(f_stemIng)]),
+                ('pos', f_stem + f_affixes),
+                ('wordforms', [sum(f_stem)] + [sum(f_stemS)] + [sum(f_stemEd)] + [sum(f_stemIng)]),
                 ('affixed_wordforms', [sum(f_stemS)] + [sum(f_stemEd)] + [sum(f_stemIng)]),
-                ('stem', f_bare),
+                ('stem', f_stem),
                 ('stemS', f_stemS),
                 ('stemEd', f_stemEd),
                 ('stemIng', f_stemIng),
-                ('stemAndstemS_pos', f_bare + f_stemS),
-                ('stemAndstemS_wordforms', [sum(f_bare)] + [sum(f_stemS)]),
+                ('stemAndstemS_pos', f_stem + f_stemS),
                 ('verbs', f_verbs),
                 ('nouns', f_nouns),
                 ('adjectives', f_adjs),
@@ -330,33 +323,13 @@ class LexVars(Corpus):
             H = [('H_'+x, self.entropy(dist[x], smooth)) for x in dist]
             H = collections.OrderedDict(H)
             # calculate change in entropy from prior to posterior distribution
-            delta_dist = [
-                ('stem_pos', (dist['separate_bare'], dist['stem'])),
-                ('stem_wordforms', (dist['wordforms'],  [sum(dist['stem'])])),
-                ('Vstem_verbs', (dist['verbs'], f_Vstem)),
-                ('stemS_all_pos', (dist['separate_bare'], dist['stemS'])),
-                ('stemS_affixes_pos', (dist['no_bare'], dist['stemS'])),
-                ('stemS_all_wordforms', (dist['wordforms'], [sum(dist['stemS'])])),
-                ('stemS_affixes_wordforms', (dist['affixed_wordforms'], [sum(dist['stemS'])])),
-                ('VstemS_verbs', (dist['verbs'], f_VstemS))
+            deltaH = [
+                ('stem_pos', H['H_pos'] - H['H_stem']),
+                ('stemS_pos', H['H_pos'] - H['H_stemS']),
+                ('stemEd_pos', H['H_pos'] - H['H_stemEd']),
+                ('stemIng_pos', H['H_pos'] - H['H_stemIng'])
             ]
-            deltaH = collections.OrderedDict()
-            for measure in delta_dist:
-                name = measure[0]
-                prior_dist = measure[1][0]
-                posterior_dist = measure[1][1]
-                difference = []  # difference = {prior} - {posterior}
-                for type_freq in prior_dist:
-                    if type_freq not in posterior_dist:
-                        difference.append(type_freq)
-                deltaH['deltaH_'+name] = -self.entropy(difference, smooth)  # negative sign for entropy reduction
-            ratioH = [
-                ('verbs_all', H['H_verbs'] / float(H['H_separate_bare'])),
-                ('deltaVstem_deltaNVstem', deltaH['deltaH_Vstem_verbs'] / float(deltaH['deltaH_stem_pos'])),
-                ('deltaVstemS_deltaNVstemS', deltaH['deltaH_VstemS_verbs'] / float(deltaH['deltaH_stemS_all_pos']))
-            ]
-            ratioH = [('ratioH_'+x[0], x[1]) for x in ratioH]  # add 'ratioH' prefix
-            ratioH = collections.OrderedDict(ratioH)
+            deltaH = collections.OrderedDict(deltaH)
             lemma_total = float(sum(dist['wordforms']))
             affixes_total = float(sum(dist['affixed_wordforms']))
             verbs_total = float(sum(dist['verbs']))
@@ -387,24 +360,24 @@ class LexVars(Corpus):
                 ('VstemS_stemS', (f_VstemS[0], stemS_total)),
                 ('NstemS_stemS', (f_NstemS[0], stemS_total))
             ]
-            ratioFre = [('ratioFre_'+x[0], self.surprisal(x[1][0], x[1][1])) for x in ratios]
-            ratioFre = collections.OrderedDict(ratioFre)
-            ratioFre['Lg10LemmaFre'] = np.log10(sum(dist['wordforms']))  # TODO move this to a more logical place
+            I = [('I_'+x[0], self.surprisal(x[1][0], x[1][1])) for x in ratios]
+            I = collections.OrderedDict(I)
+            I['Lg10LemmaFre'] = np.log10(sum(dist['wordforms']))  # TODO move this to a more logical place
             # this comprises the transition probabilities with multiple transitions
             transitions = [
-                ('Vstem_Vlemma_lemma', (ratioFre['ratioFre_Vstem_Vlemma'], ratioFre['ratioFre_Vlemma_lemma'])),
-                ('Vstem_stem_lemma', (ratioFre['ratioFre_Vstem_stem'], ratioFre['ratioFre_stem_lemma'])),
-                ('VstemS_Vlemma_lemma', (ratioFre['ratioFre_VstemS_Vlemma'], ratioFre['ratioFre_Vlemma_lemma'])),
-                ('VstemS_stemS_lemma', (ratioFre['ratioFre_VstemS_stemS'], ratioFre['ratioFre_stemS_lemma'])),
-                ('Nstem_Nlemma_lemma', (ratioFre['ratioFre_Nstem_Nlemma'], ratioFre['ratioFre_Nlemma_lemma'])),
-                ('Nstem_stem_lemma', (ratioFre['ratioFre_Nstem_stem'], ratioFre['ratioFre_stem_lemma'])),
-                ('NstemS_Nlemma_lemma', (ratioFre['ratioFre_NstemS_Nlemma'], ratioFre['ratioFre_Nlemma_lemma'])),
-                ('NstemS_stemS_lemma', (ratioFre['ratioFre_NstemS_stemS'], ratioFre['ratioFre_stemS_lemma']))
+                ('Vstem_Vlemma_lemma', (I['I_Vstem_Vlemma'], I['I_Vlemma_lemma'])),
+                ('Vstem_stem_lemma', (I['I_Vstem_stem'], I['I_stem_lemma'])),
+                ('VstemS_Vlemma_lemma', (I['I_VstemS_Vlemma'], I['I_Vlemma_lemma'])),
+                ('VstemS_stemS_lemma', (I['I_VstemS_stemS'], I['I_stemS_lemma'])),
+                ('Nstem_Nlemma_lemma', (I['I_Nstem_Nlemma'], I['I_Nlemma_lemma'])),
+                ('Nstem_stem_lemma', (I['I_Nstem_stem'], I['I_stem_lemma'])),
+                ('NstemS_Nlemma_lemma', (I['I_NstemS_Nlemma'], I['I_Nlemma_lemma'])),
+                ('NstemS_stemS_lemma', (I['I_NstemS_stemS'], I['I_stemS_lemma']))
             ]
-            TP = [('TP_'+x[0], x[1][0] * x[1][1]) for x in transitions]
-            TP = collections.OrderedDict(TP)
+            deltaI = [('deltaI_'+x[0], x[1][0] + x[1][1]) for x in transitions]  # Note this should be + not -
+            deltaI = collections.OrderedDict(deltaI)
 
-            for group in [H, deltaH, ratioH, ratioFre, TP]:
+            for group in [H, deltaH, I, deltaI]:
                 for measure in group:
                     if use_subtlex:
                         prefix = 'slx'  # add prefix to indicate which corpus was used
@@ -485,7 +458,7 @@ class LexVars(Corpus):
         if b == 0:
             return 0
         else:
-            return a / float(b)
+            return -np.log2(a / float(b))
 
 def debug():
     lex = LexVars(path_to_ds)
