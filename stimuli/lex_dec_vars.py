@@ -180,9 +180,35 @@ class LexVars(Corpus):
             new_column.append(ratio)
         self._append_column(new_column, new_var)
 
-    def inflectional_information(self, use_subtlex=True, smooth=1):
+    def inflectional_information(self, use_subtlex=True, all_family_stats=False, smooth=1):
         """
         """
+        
+        flect_lookup = {
+            ('singular',): 'Noun_bare',
+            ('plural',): 'Noun_s',
+            ('infinitive',): 'Verb_bare',
+            ('present_tense', '1st_person_verb', 'singular'): 'Verb_bare',
+            ('present_tense', '2nd_person_verb', 'singular'): 'Verb_bare',
+            ('present_tense', 'plural'): 'Verb_bare',
+            ('present_tense', '3rd_person_verb', 'singular'): 'Verb_s',
+            ('past_tense', '1st_person_verb', 'singular'): 'Verb_ed',
+            ('past_tense', '2nd_person_verb', 'singular'): 'Verb_ed',
+            ('past_tense', '3rd_person_verb', 'singular'): 'Verb_ed',
+            ('past_tense', 'plural'): 'Verb_ed',
+            ('participle', 'past_tense'): 'Verb_ed',
+            ('participle', 'present_tense'): 'Verb_ing'
+        }
+
+        slx_pos_lookup = {
+            'Noun_bare': ('Noun',),
+            'Noun_s': ('Noun',),
+            'Verb_bare': ('Verb',),
+            'Verb_s': ('Verb',),
+            'Verb_ed': ('Verb', 'Adjective'),
+            'Verb_ing': ('Verb', 'Adjective')
+        }
+
         get_fieldnames = True
         warn_msg = False
         for record in self._dict:
@@ -192,70 +218,46 @@ class LexVars(Corpus):
             counter = collections.Counter()
 
             for wf in all_wordforms:
-                infl = wf.FlectType
-                clx_freq = wf.Cob  # huge rounding error with freq/million, so just use raw count
                 if use_subtlex:
                     if False in [w.Word in slx for w in all_wordforms]:
                         # not all members of an inflectional family could be found in SUBTLEX.
                         # for this family use CELEX instead of SUBTLEX to calculate entropy.
+                        # note that this will make token counts uninterpretable (currently just Lg10RootFre)
                         all_flects_in_subtlex = False
                         warn_msg = True
                     else:
                         all_flects_in_subtlex = True
-
-                if infl[0] == 'present_tense' and infl[1] != '3rd_person_verb' or infl[0] == 'infinitive':
-                    if use_subtlex and all_flects_in_subtlex:
-                        counter['bare_verb'] = self.get_subtlex_freq(wf.Word, 'Verb')
-                    else:
-                        counter['bare_verb'] += clx_freq
-                if infl[0] == 'singular':
-                    if use_subtlex and all_flects_in_subtlex:
-                        counter['bare_noun'] = self.get_subtlex_freq(wf.Word, 'Noun')
-                    else:
-                        counter['bare_noun'] += clx_freq
-                if infl[0] == 'plural':
-                    if use_subtlex and all_flects_in_subtlex:
-                        counter['noun_plural'] = self.get_subtlex_freq(wf.Word, 'Noun')
-                    else:
-                        counter['noun_plural'] += clx_freq
-                if infl == ['present_tense', '3rd_person_verb', 'singular']:
-                    if use_subtlex and all_flects_in_subtlex:
-                        counter['third_sg'] = self.get_subtlex_freq(wf.Word, 'Verb')
-                    else:
-                        counter['third_sg'] += clx_freq
-                if infl == ['participle', 'present_tense']:
-                    if use_subtlex and all_flects_in_subtlex:
-                        counter['verb_ing'] = self.get_subtlex_freq(wf.Word, 'Verb')
-                        counter['adj_ing'] = self.get_subtlex_freq(wf.Word, 'Adjective')
-                    else:
-                        counter['verb_ing'] += clx_freq
-                # past participle and past tense are collapsed, so doesn't work for irregulars
-                if infl == ['participle', 'past_tense'] or infl[0] == 'past_tense':
-                    if use_subtlex and all_flects_in_subtlex:
-                        counter['verb_ed'] = self.get_subtlex_freq(wf.Word, 'Verb')
-                        counter['adj_ed'] = self.get_subtlex_freq(wf.Word, 'Adjective')
-                    else:
-                        counter['verb_ed'] += clx_freq
+                features = wf.FlectType
+                if 'rare_form' in features:  # skip rare forms
+                    continue
+                flect = flect_lookup[tuple(features)]
+                if use_subtlex and all_flects_in_subtlex:
+                    for pos in slx_pos_lookup[flect]:
+                        pos_freq = self.get_subtlex_freq(wf.Word, pos)
+                        flect_name = pos + '_' + flect.split('_')[1]
+                        counter[flect_name] = pos_freq  # SUBTLEX freqs are already summed, so just use '='
+                else:
+                    counter[flect] += wf.Cob  # huge rounding error with freq/million, so just use raw count
 
             counter = {k: counter[k] * 1000 for k in counter}  # after freqs are tallied, multiply all freqs by 1000
 
-            affixes = ['noun_plural', 'third_sg', 'verb_ing', 'adj_ing', 'verb_ed', 'adj_ed']
-            nouns = ['bare_noun', 'noun_plural']
-            verbs = ['bare_verb', 'third_sg', 'verb_ed', 'verb_ing']
-            adjectives = ['adj_ed', 'adj_ing']
+            affixes = ['Noun_s', 'Verb_s', 'Verb_ing', 'Adjective_ing', 'Verb_ed', 'Adjective_ed']
+            nouns = ['Noun_bare', 'Noun_s']
+            verbs = ['Verb_bare', 'Verb_s', 'Verb_ed', 'Verb_ing']
+            adjectives = ['Adjective_ed', 'Adjective_ing']
 
             # frequency counts
             f_affixes = [counter[i] for i in affixes if i in counter]
-            f_stem = [counter[i] for i in ['bare_noun', 'bare_verb'] if i in counter]
-            f_stemS = [counter[i] for i in ['noun_plural', 'third_sg'] if i in counter]
-            f_stemEd = [counter[i] for i in ['verb_ed', 'adj_ed'] if i in counter]
-            f_stemIng = [counter[i] for i in ['verb_ing', 'adj_ing'] if i in counter]
-            f_Vstem = [counter['bare_verb']]
-            f_Nstem = [counter['bare_noun']]
-            f_VstemS = [counter['third_sg']]
-            f_NstemS = [counter['noun_plural']]
-            f_VstemEd = [counter['verb_ed']]
-            f_VstemIng = [counter['verb_ing']]
+            f_stem = [counter[i] for i in ['Noun_bare', 'Verb_bare'] if i in counter]
+            f_stemS = [counter[i] for i in ['Noun_s', 'Verb_s'] if i in counter]
+            f_stemEd = [counter[i] for i in ['Verb_ed', 'Adjective_ed'] if i in counter]
+            f_stemIng = [counter[i] for i in ['Verb_ing', 'Adjective_ing'] if i in counter]
+            f_Vstem = [counter['Verb_bare']]
+            f_Nstem = [counter['Noun_bare']]
+            f_VstemS = [counter['Verb_s']]
+            f_NstemS = [counter['Noun_s']]
+            f_VstemEd = [counter['Verb_ed']]
+            f_VstemIng = [counter['Verb_ing']]
             f_nouns = [counter[i] for i in nouns if i in counter]
             f_verbs = [counter[i] for i in verbs if i in counter]
             f_adjs = [counter[i] for i in adjectives if i in counter]
