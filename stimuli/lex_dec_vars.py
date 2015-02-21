@@ -183,7 +183,8 @@ class LexVars(Corpus):
     def inflectional_information(self, use_subtlex=True, all_family_stats=False, smooth=1):
         """
         """
-        
+
+        # classifies a word into one of several categories based on features from CELEX
         flect_lookup = {
             ('singular',): 'Noun_bare',
             ('plural',): 'Noun_s',
@@ -200,6 +201,7 @@ class LexVars(Corpus):
             ('participle', 'present_tense'): 'Verb_ing'
         }
 
+        # maps CELEX classifications to SUBTLEX PoS classifications
         slx_pos_lookup = {
             'Noun_bare': ('Noun',),
             'Noun_s': ('Noun',),
@@ -215,27 +217,24 @@ class LexVars(Corpus):
             clx_lemmas = clx.lemma_lookup(self._dict[record]['lemma_headword'])
             # Use __builtin__ here in case sum is overshadowed by numpy
             all_wordforms = __builtin__.sum((clx.lemma_to_wordforms(clx_lemma) for clx_lemma in clx_lemmas), [])
+            all_wordforms = [wf for wf in all_wordforms if not 'rare_form' in wf.FlectType]  # remove rare forms
+            in_slx = [w.Word in slx for w in all_wordforms]  # list of bools
             counter = collections.Counter()
 
             for wf in all_wordforms:
+                features = wf.FlectType
+                flect = flect_lookup[tuple(features)]
                 if use_subtlex:
-                    if False in [w.Word in slx for w in all_wordforms]:
+                    if False in in_slx:
                         # not all members of an inflectional family could be found in SUBTLEX.
                         # for this family use CELEX instead of SUBTLEX to calculate entropy.
                         # note that this will make token counts uninterpretable (currently just Lg10RootFre)
-                        all_flects_in_subtlex = False
-                        warn_msg = True
+                        counter[flect] += wf.Cob
                     else:
-                        all_flects_in_subtlex = True
-                features = wf.FlectType
-                if 'rare_form' in features:  # skip rare forms
-                    continue
-                flect = flect_lookup[tuple(features)]
-                if use_subtlex and all_flects_in_subtlex:
-                    for pos in slx_pos_lookup[flect]:
-                        pos_freq = self.get_subtlex_freq(wf.Word, pos)
-                        flect_name = pos + '_' + flect.split('_')[1]
-                        counter[flect_name] = pos_freq  # SUBTLEX freqs are already summed, so just use '='
+                        for pos in slx_pos_lookup[flect]:
+                            pos_freq = self.get_subtlex_freq(wf.Word, pos)
+                            flect_name = pos + '_' + flect.split('_')[1]
+                            counter[flect_name] = pos_freq  # SUBTLEX freqs are already summed, so just use '='
                 else:
                     counter[flect] += wf.Cob  # huge rounding error with freq/million, so just use raw count
 
@@ -282,9 +281,11 @@ class LexVars(Corpus):
                 ('adjectives', f_adjs)
             ]
             dist = collections.OrderedDict(dist)
+
             # calculate entropy measures from frequency distributions
             H = [('H_'+x, self.entropy(dist[x], smooth)) for x in dist]
             H = collections.OrderedDict(H)
+
             # calculate change in entropy from prior to posterior distribution
             deltaH = [
                 ('stem_pos', H['H_pos_tokens'] - H['H_stem']),
@@ -301,6 +302,8 @@ class LexVars(Corpus):
                 ('Nlemma_lemma', H['H_lemma_tokens'] - H['H_Nlemma_tokens'])
             ]
             deltaH = collections.OrderedDict(deltaH)
+
+            # calculate frequency ratios (simple transition probabilities)
             root_total = float(sum(dist['wordforms']))
             affixes_total = float(sum(dist['affixed_wordforms']))
             verbs_total = float(sum(dist['verbs']))
@@ -310,7 +313,6 @@ class LexVars(Corpus):
             stemS_total = float(sum(dist['stemS']))
             stemEd_total = float(sum(dist['stemEd']))
             stemIng_total = float(sum(dist['stemIng']))
-            # this comprises the simple transition probabilities (surprisal ratios)
             ratios = [
                 ('stem_root', (sum(dist['stem']), root_total)),
                 ('stemS_root', (sum(dist['stemS']), root_total)),
@@ -345,10 +347,13 @@ class LexVars(Corpus):
                 ('VstemIng_verb', (f_VstemIng[0], verbs_total)),
                 ('VstemIng_stemIng', (f_VstemIng[0], stemIng_total)),
             ]
+
+            # calculate surprisal from frequency ratios
             I = [('I_'+x[0], self.surprisal(x[1][0], x[1][1])) for x in ratios]
             I = collections.OrderedDict(I)
             I['Lg10RootFre'] = np.log10(sum(dist['wordforms']) / float(1000))  # was multiplied by 1000 earlier
-            # this comprises the transition probabilities with multiple transitions
+
+            # surprisal for complex transition probabilities (multiple transitions)
             transitions = [
                 ('Vstem_Vlemma_root', (I['I_Vstem_Vlemma'], I['I_Vlemma_root'])),
                 ('Vstem_verb_root', (I['I_Vstem_verb'], I['I_verb_root'])),
