@@ -50,6 +50,11 @@ class Corpus(Mapping):
         if not name in self.fieldnames:  # avoid duplicating fieldnames
             self.fieldnames.append(name)
 
+    def get_column(self, name):
+        """Returns the column given by 'name'.
+        """
+        return [self._dict[entry][name] for entry in self._dict]
+
     def compare_items(self, compare_to, show_missing_items=False):
         """Compares keys to the keys of another Corpus instance or to elements of a list-like object.
         """
@@ -108,6 +113,26 @@ class Corpus(Mapping):
         new_columns = zip(*new_values)  # transpose to list of columns
         for column, i in zip(new_columns, xrange(len(columns))):
             self._append_column(column, columns[i])
+
+    def merge_columns(self, id_column, columns_to_merge, position_name, new_name):
+        """
+        Ex: c.merge_columns('Flect_Type', [xxxxPastTense_xxxx, xxxxPastParticiple_xxxx], 0, 'xxxxPast_xxxx')
+        """
+        row_ids = self.get_column(id_column)
+        remaining_id_types = set(row_ids)
+        new_column = [None]*self.__len__()
+        for col_name in columns_to_merge:
+            current_column = self.get_column(col_name)
+            col_id = None
+            for row_id in remaining_id_types:
+                if col_name.split('_')[position_name].endswith(row_id):
+                    col_id = row_id
+                    remaining_id_types.remove(row_id)
+                    break
+            for i, row_id in enumerate(row_ids):
+                if row_id == col_id:
+                    new_column[i] = current_column[i]
+        self._append_column(new_column, new_name)
 
     def _warning_msg(self, func_name, comparison, show_missing_items=False):
         if show_missing_items:
