@@ -33,14 +33,15 @@ def test_all():
     stems = change_spelling(stems, 'British', brit_spell)
     lex._append_column(stems, 'lemma_headword')  # b/c lemma_headword method gets some headwords wrong
     lex.change_spelling('British', brit_spell, varconPath)
-    lex.inflectional_information(use_subtlex=False)
+    lex.inflectional_information(use_subtlex=False)  # celex frequencies
+    lex.inflectional_information(use_subtlex=True)  # subtlex frequencies
     lex.derivational_family_size()
     lex.derivational_family_entropy()
 
     # condense variables
     contrasts = [('stem', 'stemS', 'stemEd'), ('stem', 'stemS')]
     replace_id_with = ['word', 'word']
-    lex.condense_by_contrasts('Type', contrasts, 2, replace_id_with, remove_old=True)
+    lex.condense_by_contrasts('Type', contrasts, replace_id_with, index=None, remove_old=True)
     return lex
 
 def test_corr(measure, lexvars_objects=None):
