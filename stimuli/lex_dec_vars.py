@@ -211,13 +211,31 @@ class LexVars(Corpus):
             'Verb_ing': ('Verb', 'Adjective')
         }
 
+        # word form types associated with inflections
+        wf_lookup = {
+            'Noun_bare': 'stem',
+            'Noun_s': 'stemS',
+            'Verb_bare': 'stem',
+            'Verb_s': 'stemS',
+            'Verb_ed': 'stemEd',
+            'Verb_ing': 'stemIng'
+        }
+
         get_fieldnames = True
         warn_msg = False
         for record in self._dict:
-            clx_lemmas = clx.lemma_lookup(self._dict[record]['lemma_headword'])
+
+            # classify the entry by its CELEX features (this currently serves no purpose...)
+            clx_wfs = clx.wordform_lookup(record)
+            flect_types = [tuple(wf.FlectType) for wf in clx_wfs if tuple(wf.FlectType) in flect_lookup.keys()]
+            wf_type = wf_lookup[flect_lookup[flect_types[0]]]
+
+            # get all possible inflections of the word form
+            clx_lemmas = clx.lemma_lookup(self._dict[record]['lemma_headword'])  # must have lemma headword from CELEX
             # Use __builtin__ here in case sum is overshadowed by numpy
             all_wordforms = __builtin__.sum((clx.lemma_to_wordforms(clx_lemma) for clx_lemma in clx_lemmas), [])
             all_wordforms = [wf for wf in all_wordforms if not 'rare_form' in wf.FlectType]  # remove rare forms
+
             in_slx = [w.Word in slx for w in all_wordforms]  # list of bools
             counter = collections.Counter()
 
@@ -238,8 +256,10 @@ class LexVars(Corpus):
                 else:
                     counter[flect] += wf.Cob  # huge rounding error with freq/million, so just use raw count
 
-            counter = {k: counter[k] * 1000 for k in counter}  # after freqs are tallied, multiply all freqs by 1000
+            # after freqs are tallied, multiply all freqs by 1000 to reduce error from smoothing
+            counter = {k: counter[k] * 1000 for k in counter}
 
+            # some helpful groupings
             affixes = ['Noun_s', 'Verb_s', 'Verb_ing', 'Adjective_ing', 'Verb_ed', 'Adjective_ed']
             nouns = ['Noun_bare', 'Noun_s']
             verbs = ['Verb_bare', 'Verb_s', 'Verb_ed', 'Verb_ing']
@@ -378,13 +398,13 @@ class LexVars(Corpus):
             for group in [H, deltaH, I, deltaI]:
                 for measure in group:
                     if use_subtlex:
-                        prefix = 'slx'  # add prefix to indicate which corpus was used
+                        corpus_prefix = 'slx'  # add prefix to indicate which corpus was used
                     else:
-                        prefix = 'clx'
-                    self._dict[record][prefix + '_' + measure] = group[measure]
+                        corpus_prefix = 'clx'
+                    self._dict[record][corpus_prefix + '_' + measure] = group[measure]
                     if get_fieldnames:
                         if not measure in self.fieldnames:  # avoid duplicating fieldnames
-                            self.fieldnames.append(measure)
+                            self.fieldnames.append(corpus_prefix + '_' + measure)
             get_fieldnames = False
 
         if warn_msg is True:
@@ -478,6 +498,7 @@ def debug():
     stems = [lex[w]['Stem'] for w in lex]
     stems = change_spelling(stems, 'British', brit_spell)
     lex._append_column(stems, 'lemma_headword')  # b/c lemma_headword method gets some headwords wrong
+    lex.change_spelling('British', brit_spell)
     lex.inflectional_information()
     lex.derivational_family_size()
     lex.derivational_family_entropy()
