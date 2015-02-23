@@ -50,6 +50,13 @@ class Corpus(Mapping):
         if not name in self.fieldnames:  # avoid duplicating fieldnames
             self.fieldnames.append(name)
 
+    def _remove_column(self, name):
+        """Removes the column given by 'name'.
+        """
+        for entry in self._dict:
+            del self._dict[entry][name]
+        self.fieldnames.remove(name)
+
     def get_column(self, name):
         """Returns the column given by 'name'.
         """
@@ -114,7 +121,7 @@ class Corpus(Mapping):
         for column, i in zip(new_columns, xrange(len(columns))):
             self._append_column(column, columns[i])
 
-    def merge_columns(self, id_column, columns_to_merge, name_str_index, new_name):
+    def merge_columns(self, id_column, columns_to_merge, name_str_index, new_name, remove_old=False):
         """
         Ex: c.merge_columns('Flect_Type', [xxxxPastTense_xxxx, xxxxPastParticiple_xxxx], 0, 'xxxxPast_xxxx')
         """
@@ -133,9 +140,11 @@ class Corpus(Mapping):
             for i, row_id in enumerate(row_ids):
                 if row_id == col_id:
                     new_column[i] = current_column[i]
+            if remove_old:
+                self._remove_column(col_name)
         self._append_column(new_column, new_name)
 
-    def condense_by_contrasts(self, id_column, contrasts, name_str_index, replace_id_with):
+    def condense_by_contrasts(self, id_column, contrasts, name_str_index, replace_id_with, remove_old=False):
         """
         Ex: c.condense_by_contrasts('Flect_Type', [('xxxxPastTense_xxxx', 'xxxxPastParticiple_xxxx'),
                                    ('xxxxPastParticiple_xxxx, xxxxPresentParticiple_xxxx)], 0, ['Past', 'Participle'])
@@ -163,6 +172,7 @@ class Corpus(Mapping):
         # sort by smallest contrast size
         contrasts, replace_id_with = (list(pair) for pair in zip(*sorted(zip(contrasts, replace_id_with),
                                                                          key=lambda pair: len(pair[0]))))
+        columns_merged = set()
         for contrast, replacement in zip(contrasts, replace_id_with):
             # get columns common to all ids in a contrast
             common = set.intersection(*[set(colType_by_id[condition]) for condition in contrast])
@@ -172,7 +182,13 @@ class Corpus(Mapping):
                 for id in contrast:
                     has_id = column_type.replace('<$>', id)
                     columns_to_merge.append(has_id)
-                self.merge_columns(id_column, columns_to_merge, name_str_index, new_name)
+                    columns_merged.add(has_id)
+                # note: do not pass remove_old to this method; will break if the same column is in multiple contrasts
+                # this gets handled separately below
+                self.merge_columns(id_column, columns_to_merge, name_str_index, new_name, False)
+        if remove_old:
+            for old_col in columns_merged:
+                self._remove_column(old_col)
 
     def _warning_msg(self, func_name, comparison, show_missing_items=False):
         if show_missing_items:
