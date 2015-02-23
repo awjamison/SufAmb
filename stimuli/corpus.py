@@ -1,19 +1,19 @@
 __author__ = 'Andrew Jamison'
 
 from collections import Mapping, OrderedDict
-from os import path
+import os
 import csv
 
 # some helpful directories
-home = path.expanduser("~")
-expPath = path.join(home, "Dropbox", "SufAmb", "master_list35_update3_words.csv")  # path to custom list; edit
-corPath = path.join(home, "Dropbox", "corpora")  # path to corpora; edit
-elpPath = path.join(corPath, "ELP", "ELPfull.csv")
-clxPath = path.join(corPath, "CELEX_V2")
-slxPath = path.join(corPath, "SUBTLEX-US.csv")
-aoaPath = path.join(corPath, "AoA.csv")
-varconPath = path.join(corPath, "varcon.txt")
-outPath = path.join(home, "Dropbox", "SufAmb", "this_is_a_test.csv")
+home = os.path.expanduser("~")
+expPath = os.path.join(home, "Dropbox", "SufAmb", "master_list35_update3_words.csv")  # path to custom list; edit
+corPath = os.path.join(home, "Dropbox", "corpora")  # path to corpora; edit
+elpPath = os.path.join(corPath, "ELP", "ELPfull.csv")
+clxPath = os.path.join(corPath, "CELEX_V2")
+slxPath = os.path.join(corPath, "SUBTLEX-US.csv")
+aoaPath = os.path.join(corPath, "AoA.csv")
+varconPath = os.path.join(corPath, "varcon.txt")
+outPath = os.path.join(home, "Dropbox", "SufAmb", "this_is_a_test.csv")
 
 class Corpus(Mapping):
     """Special data container for a table of words and their properties.\n
@@ -44,7 +44,7 @@ class Corpus(Mapping):
         """
         column = tuple(column)
         if len(column) != self.__len__():
-            raise ValueError("Length of column object must match length of Corpus instance.")
+            raise ValueError("Length of column object must match number of entries in Corpus.")
         for entry, index in zip(self._dict, xrange(len(column))):
             self._dict[entry][name] = column[index]  # will replace a column with the same name
         if not name in self.fieldnames:  # avoid duplicating fieldnames
@@ -114,25 +114,65 @@ class Corpus(Mapping):
         for column, i in zip(new_columns, xrange(len(columns))):
             self._append_column(column, columns[i])
 
-    def merge_columns(self, id_column, columns_to_merge, position_name, new_name):
+    def merge_columns(self, id_column, columns_to_merge, name_str_index, new_name):
         """
         Ex: c.merge_columns('Flect_Type', [xxxxPastTense_xxxx, xxxxPastParticiple_xxxx], 0, 'xxxxPast_xxxx')
         """
         row_ids = self.get_column(id_column)
-        remaining_id_types = set(row_ids)
+        # unique ids ordered from longest to shortest (avoids matching an id that is a substring of another id)
+        remaining_ids = sorted(list(set(row_ids)), key=lambda x: len(x), reverse=True)
         new_column = [None]*self.__len__()
         for col_name in columns_to_merge:
             current_column = self.get_column(col_name)
             col_id = None
-            for row_id in remaining_id_types:
-                if col_name.split('_')[position_name].endswith(row_id):
+            for row_id in remaining_ids:
+                if col_name.split('_')[name_str_index].endswith(row_id):
                     col_id = row_id
-                    remaining_id_types.remove(row_id)
+                    remaining_ids.remove(row_id)
                     break
             for i, row_id in enumerate(row_ids):
                 if row_id == col_id:
                     new_column[i] = current_column[i]
         self._append_column(new_column, new_name)
+
+    def condense_by_contrasts(self, id_column, contrasts, name_str_index, replace_id_with):
+        """
+        Ex: c.condense_by_contrasts('Flect_Type', [('xxxxPastTense_xxxx', 'xxxxPastParticiple_xxxx'),
+                                   ('xxxxPastParticiple_xxxx, xxxxPresentParticiple_xxxx)], 0, ['Past', 'Participle'])
+        """
+        # unique ids ordered from longest to shortest (avoids matching an id that is a substring of another id)
+        ids = sorted(list(set(self.get_column(id_column))), key=lambda x: len(x), reverse=True)
+        # {'id1': ['xxxx<$>_xxxx', 'yyyy<$>_yyyy', ...], 'id2': ['xxxx<$>_xxxx', 'yyyy<$>_yyyy', ...], ...}
+        colType_by_id = {}
+        remaining_col_names = self.fieldnames
+        # group columns by id for those with an id in ids
+        for id in ids:
+            matches = []
+            for col_name in remaining_col_names:
+                split_col_name = col_name.split('_')
+                if len(split_col_name) > name_str_index:
+                    if split_col_name[name_str_index].endswith(id):
+                        split_col_name[name_str_index] = split_col_name[name_str_index].replace(id, '<$>')
+                        stripped_id = '_'.join(split_col_name)
+                        matches.append(stripped_id)
+            colType_by_id[id] = matches
+            # remove previous matches to avoid double-matching an id that is a substring of another id
+            remaining_col_names = set(remaining_col_names) - set(matches)
+
+        contrasts, replace_id_with = list(contrasts), list(replace_id_with)  # coerce to lists
+        # sort by smallest contrast size
+        contrasts, replace_id_with = (list(pair) for pair in zip(*sorted(zip(contrasts, replace_id_with),
+                                                                         key=lambda pair: len(pair[0]))))
+        for contrast, replacement in zip(contrasts, replace_id_with):
+            # get columns common to all ids in a contrast
+            common = set.intersection(*[set(colType_by_id[condition]) for condition in contrast])
+            for column_type in common:
+                columns_to_merge = []
+                new_name = column_type.replace('<$>', replacement)
+                for id in contrast:
+                    has_id = column_type.replace('<$>', id)
+                    columns_to_merge.append(has_id)
+                self.merge_columns(id_column, columns_to_merge, name_str_index, new_name)
 
     def _warning_msg(self, func_name, comparison, show_missing_items=False):
         if show_missing_items:
