@@ -36,6 +36,11 @@ def test_all():
     lex.inflectional_information(use_subtlex=False)
     lex.derivational_family_size()
     lex.derivational_family_entropy()
+
+    # condense variables
+    contrasts = [('stem', 'stemS', 'stemEd'), ('stem', 'stemS')]
+    replace_id_with = ['word', 'word']
+    lex.condense_by_contrasts('Type', contrasts, 2, replace_id_with, remove_old=True)
     return lex
 
 def test_corr(measure, lexvars_objects=None):
@@ -68,18 +73,32 @@ def test_corrs(measures, lexvars_objects=None):
 def test_condense():
     c = Corpus(expPath)
     c._append_column(['c'+str(j) for i in range(len(c)/5) for j in range(1,6)], 'id_col')  # create five conditions
-    # create a variable shared by three conditions
+    # create a variable shared by four conditions
     c._append_column([1]*len(c), 'xxx_xxxc1_xxx')
     c._append_column([2]*len(c), 'xxx_xxxc2_xxx')
     c._append_column([3]*len(c), 'xxx_xxxc3_xxx')
-    # create another variable shared by three conditions, two of which share the previous variable
+    c._append_column([5]*len(c), 'xxx_xxxc5_xxx')
+    # create another variable shared by a subset of the previous conditions
+    c._append_column([2]*len(c), 'zzz_zzzc2_zzz')
+    c._append_column([3]*len(c), 'zzz_zzzc3_zzz')
+    # create another variable shared by four conditions, two of which share the previous variable
     c._append_column([2]*len(c), 'yyy_yyyc2_yyy')
     c._append_column([3]*len(c), 'yyy_yyyc3_yyy')
     c._append_column([4]*len(c), 'yyy_yyyc4_yyy')
+    c._append_column([5]*len(c), 'yyy_yyyc5_yyy')
+    # create variable that contains multiple condition names
+    # should merge 'xxx_xxxc2_c2' and 'xxx_xxxc3_c3' but not 'xxx_xxxc2_c2' and 'xxx_xxxc2_c3'
+    c._append_column([2]*len(c), 'xxx_xxxc2_c2')
+    c._append_column([3]*len(c), 'xxx_xxxc3_c3')
+    c._append_column(['x']*len(c), 'xxx_xxxc2_c3')
+    c._append_column(['x']*len(c), 'xxx_xxxc3_c2')
 
-    contrasts = [('c1', 'c2', 'c3'), ('c2', 'c3', 'c4')]
-    replace_id_with = ['C1C2C3', 'C2C3C4']
-    c.condense_by_contrasts('id_col', contrasts, 1, replace_id_with, remove_old=True)
+    contrasts = [('c1', 'c2', 'c3'), ('c2', 'c3'), ('c2', 'c3', 'c4')]
+    # ('c1', 'c2', 'c3') and ('c2', 'c3', 'c4') can form one column
+    # ('c2', 'c3') can form four columns (one for each variable type)
+    # c5 can form two columns (condenses with no other id)
+    replace_id_with = ['C1C2C3', 'C2C3', 'C2C3C4']
+    c.condense_by_contrasts('id_col', contrasts, replace_id_with, index=None, remove_old=True)
 
     c.write(outPath)  # easiest just to check by viewing csv file
     return c

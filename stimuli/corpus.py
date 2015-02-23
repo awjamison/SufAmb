@@ -111,7 +111,7 @@ class Corpus(Mapping):
         for column, i in zip(new_columns, xrange(len(columns))):
             self._append_column(column, columns[i])
 
-    def merge_columns(self, id_column, columns_to_merge, name_str_index, new_name, remove_old=False):
+    def merge_columns(self, id_column, columns_to_merge, new_name, index=None, remove_old=False):
         """
         Ex: c.merge_columns('Flect_Type', [xxxxPastTense_xxxx, xxxxPastParticiple_xxxx], 0, 'xxxxPast_xxxx')
         """
@@ -123,10 +123,16 @@ class Corpus(Mapping):
             current_column = self.get_column(col_name)
             col_id = None
             for row_id in remaining_ids:
-                if col_name.split('_')[name_str_index].endswith(row_id):
-                    col_id = row_id
-                    remaining_ids.remove(row_id)
-                    break
+                if index:  # search for id at (the end of) a specific index in the list str.split('_')
+                    if col_name.split('_')[index].endswith(row_id):
+                        col_id = row_id
+                        remaining_ids.remove(row_id)
+                        break
+                else:  # search for id at any place in string preceding '_' or at end of string
+                    if row_id + '_' in col_name or col_name.endswith(row_id):
+                        col_id = row_id
+                        remaining_ids.remove(row_id)
+                        break
             for i, row_id in enumerate(row_ids):
                 if row_id == col_id:
                     new_column[i] = current_column[i]
@@ -134,7 +140,7 @@ class Corpus(Mapping):
                 self._remove_column(col_name)
         self._append_column(new_column, new_name)
 
-    def condense_by_contrasts(self, id_column, contrasts, name_str_index, replace_id_with, remove_old=False):
+    def condense_by_contrasts(self, id_column, contrasts, replace_id_with, index=None, remove_old=False):
         """
         Ex: c.condense_by_contrasts('Flect_Type', [('xxxxPastTense_xxxx', 'xxxxPastParticiple_xxxx'),
                                    ('xxxxPastParticiple_xxxx, xxxxPresentParticiple_xxxx)], 0, ['Past', 'Participle'])
@@ -148,18 +154,26 @@ class Corpus(Mapping):
         for id in ids:
             matches = []
             for col_name in remaining_col_names:
-                split_col_name = col_name.split('_')
-                if len(split_col_name) > name_str_index:
-                    if split_col_name[name_str_index].endswith(id):
-                        split_col_name[name_str_index] = split_col_name[name_str_index].replace(id, '<$>')
-                        stripped_id = '_'.join(split_col_name)
+                if index:  # search for id at (the end of) a specific index in the list str.split('_')
+                    split_col_name = col_name.split('_')
+                    if len(split_col_name) > index:
+                        # found id: strip the col name of id (at index) and append the new name to matches
+                        if split_col_name[index].endswith(id):
+                            split_col_name[index] = split_col_name[index].replace(id, '<$>')
+                            stripped_id = '_'.join(split_col_name)
+                            matches.append(stripped_id)
+                else:  # search for id directly preceding any occurrence of '_' in string or at end of string
+                    split_col_name = [s.replace(id, '<$>') if s.endswith(id) else s for s in col_name.split('_')]
+                    stripped_id = '_'.join(split_col_name)
+                    # found id: strip the col name of all occurrences of id and append the new name to matches
+                    if '<$>' in stripped_id:
                         matches.append(stripped_id)
             colType_by_id[id] = matches
             # remove previous matches to avoid double-matching an id that is a substring of another id
             remaining_col_names = set(remaining_col_names) - set(matches)
 
         contrasts, replace_id_with = list(contrasts), list(replace_id_with)  # coerce to lists
-        # sort by smallest contrast size
+        # sort by smallest contrast size (necessary because supersets will replace subsets)
         contrasts, replace_id_with = (list(pair) for pair in zip(*sorted(zip(contrasts, replace_id_with),
                                                                          key=lambda pair: len(pair[0]))))
         columns_merged = set()
@@ -175,7 +189,7 @@ class Corpus(Mapping):
                     columns_merged.add(has_id)
                 # note: do not pass remove_old to this method; will break if the same column is in multiple contrasts
                 # this gets handled separately below
-                self.merge_columns(id_column, columns_to_merge, name_str_index, new_name, False)
+                self.merge_columns(id_column, columns_to_merge, new_name, index, False)
         if remove_old:
             for old_col in columns_merged:
                 self._remove_column(old_col)
