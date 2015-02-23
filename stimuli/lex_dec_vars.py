@@ -295,7 +295,8 @@ class LexVars(Corpus):
                 ('stemIng', f_stemIng),
                 ('stemAndstemS', f_stem + f_stemS),
                 ('verbs', f_verbs),
-                ('Vlemma_tokens', [sum(f_verbs + f_adjs)]),
+                # sum verbal and adjectival variants of participles
+                ('Vlemma_tokens', f_Vstem + f_VstemS + [sum(f_stemEd)] + [sum(f_stemIng)]),
                 ('nouns', f_nouns),
                 ('Nlemma_tokens', f_nouns),
                 ('adjectives', f_adjs)
@@ -321,6 +322,7 @@ class LexVars(Corpus):
                 ('noun_lemma', H['H_lemma_tokens'] - H['H_nouns']),
                 ('Nlemma_lemma', H['H_lemma_tokens'] - H['H_Nlemma_tokens'])
             ]
+            deltaH = [('deltaH_'+x[0], x[1]) for x in deltaH]
             deltaH = collections.OrderedDict(deltaH)
 
             # calculate frequency ratios (simple transition probabilities)
@@ -346,26 +348,28 @@ class LexVars(Corpus):
                 ('noun_root', (nouns_total, root_total)),
                 ('Vstem_root', (f_Vstem[0], root_total)),
                 ('VstemS_root', (f_VstemS[0], root_total)),
+                ('VstemEd_root', (f_VstemEd[0], root_total)),
+                ('VstemIng_root', (f_VstemIng[0], root_total)),
                 ('Nstem_root', (f_Nstem[0], root_total)),
                 ('NstemS_root', (f_NstemS[0], root_total)),
                 ('Vstem_Vlemma', (f_Vstem[0], Vlemma_total)),
-                ('Vstem_verb', (f_Vstem[0], verbs_total)),
                 ('VstemS_Vlemma', (f_VstemS[0], Vlemma_total)),
+                ('VstemEd_Vlemma', (f_VstemEd[0], Vlemma_total)),
+                ('VstemIng_Vlemma', (f_VstemIng[0], Vlemma_total)),
+                ('Vstem_verb', (f_Vstem[0], verbs_total)),
                 ('VstemS_verb', (f_VstemS[0], verbs_total)),
+                ('VstemEd_verb', (f_VstemEd[0], verbs_total)),
+                ('VstemIng_verb', (f_VstemIng[0], verbs_total)),
                 ('Nstem_noun', (f_Nstem[0], nouns_total)),
                 ('NstemS_noun', (f_NstemS[0], nouns_total)),
                 ('Vstem_stem', (f_Vstem[0], stem_total)),
                 ('Nstem_stem', (f_Nstem[0], stem_total)),
                 ('VstemS_stemS', (f_VstemS[0], stemS_total)),
                 ('NstemS_stemS', (f_NstemS[0], stemS_total)),
-                ('stemEd_Vlemma', (sum(dist['stemEd']), Vlemma_total)),
-                ('VstemEd_Vlemma', (f_VstemEd[0], Vlemma_total)),
-                ('VstemEd_verb', (f_VstemEd[0], verbs_total)),
                 ('VstemEd_stemEd', (f_VstemEd[0], stemEd_total)),
-                ('stemIng_Vlemma', (sum(dist['stemIng']), Vlemma_total)),
-                ('VstemIng_Vlemma', (f_VstemIng[0], Vlemma_total)),
-                ('VstemIng_verb', (f_VstemIng[0], verbs_total)),
                 ('VstemIng_stemIng', (f_VstemIng[0], stemIng_total)),
+                ('stemEd_Vlemma', (sum(dist['stemEd']), Vlemma_total)),
+                ('stemIng_Vlemma', (sum(dist['stemIng']), Vlemma_total)),
             ]
 
             # calculate surprisal from frequency ratios
@@ -446,7 +450,7 @@ class LexVars(Corpus):
             item = self._dict[record]['lemma_headword']
             derived = by_morpheme.get(item)
             if derived is not None:
-                freqs = [x['Cob'] for x in derived]
+                freqs = [int(x['Cob'])*1000 for x in derived]  # x1000 to reduce error from smoothing
                 self._dict[record]['derivational_entropy'] = self.entropy(freqs)
             else:
                 self._dict[record]['derivational_entropy'] = 0
@@ -460,27 +464,26 @@ class LexVars(Corpus):
         as plural ones, it's better to use [2, 1] as the "prior" instead of
         [1, 1]).
         """
-        freq_vec = list(freq_vec)  # coerce to list (if input is a set or something)
+        if sum(freq_vec) == 0:   # probability of every event is 0
+            return 0
+        if len(freq_vec) == 1:  # probability of the event is 1
+            return 0
         vec = np.asarray(freq_vec, float) + smoothing_constant
-        if sum(vec) == 0:   # probability of the event is 0
-            return 0
-        if len(vec) == 1:  # probability of the event is 1
-            return 0
         probs = vec / sum(vec)
-        # Make sure we're not taking the log of 0 (by convention if p(x) = 0
+        # If no smoothing constant, make sure we're not taking the log of 0 (by convention if p(x) = 0
         # then p(x) * log(p(x)) = 0 in the definition of entropy)
         probs[probs == 0] = 1
         return -np.sum(probs * np.log2(probs))
 
-    def surprisal(self, a, b):
+    def surprisal(self, a, b, smoothing_constant=1):
         """Calculates -log( p(a | b) ) where A is a subset of B
         """
-        if b == 0:
-            return 0
-        elif b < a:
+        if b < a:
             raise ValueError("Probability cannot be calculated correctly for b < a.")
+        elif b == 0:
+            return np.inf
         else:
-            return -np.log2(a / float(b))
+            return -np.log2((a+smoothing_constant) / float(b+smoothing_constant))
 
 def debug():
     lex = LexVars(path_to_ds)
@@ -499,7 +502,7 @@ def debug():
     stems = change_spelling(stems, 'British', brit_spell)
     lex._append_column(stems, 'lemma_headword')  # b/c lemma_headword method gets some headwords wrong
     lex.change_spelling('British', brit_spell)
-    lex.inflectional_information()
+    lex.inflectional_information(use_subtlex=False)
     lex.derivational_family_size()
     lex.derivational_family_entropy()
     return lex
