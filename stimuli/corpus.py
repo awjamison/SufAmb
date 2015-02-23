@@ -1,19 +1,8 @@
 __author__ = 'Andrew Jamison'
 
 from collections import Mapping, OrderedDict
-import os
 import csv
 
-# some helpful directories
-home = os.path.expanduser("~")
-expPath = os.path.join(home, "Dropbox", "SufAmb", "master_list35_update3_words.csv")  # path to custom list; edit
-corPath = os.path.join(home, "Dropbox", "corpora")  # path to corpora; edit
-elpPath = os.path.join(corPath, "ELP", "ELPfull.csv")
-clxPath = os.path.join(corPath, "CELEX_V2")
-slxPath = os.path.join(corPath, "SUBTLEX-US.csv")
-aoaPath = os.path.join(corPath, "AoA.csv")
-varconPath = os.path.join(corPath, "varcon.txt")
-outPath = os.path.join(home, "Dropbox", "SufAmb", "this_is_a_test.csv")
 
 class Corpus(Mapping):
     """Special data container for a table of words and their properties.\n
@@ -29,6 +18,7 @@ class Corpus(Mapping):
         self._dict = OrderedDict((entry[item_name], entry) for entry in db)
         if self.__len__() != len(db):
             print "WARNING: duplicate entries for '%s'. Some entries were overwritten." % item_name
+        self.varcon_path = None  # this gets set the first time change_spelling is called
 
     def __getitem__(self, key):
         return self._dict[key]
@@ -198,7 +188,7 @@ class Corpus(Mapping):
             print "WARNING: at least one item from %s was not found and was given a value of 'None'!\n" \
                   "Set 'verbose' to 'True' to see the list of items." % func_name
 
-    def change_spelling(self, change_to, compare_to=None):
+    def change_spelling(self, change_to, compare_to=None, varcon_path=None):
         """Modifies the spelling of keys to American or British English.
 
         Optional second argument constrains spelling conversions in the following way:
@@ -210,7 +200,12 @@ class Corpus(Mapping):
         value supplied in __init__.
         """
         from brit_spelling import get_translations
-        translations = get_translations(varconPath)  # must be able to find this directory
+        if self.varcon_path is None:  # this gets set the first time change_spelling is called
+            if varcon_path is None:
+                raise IOError('Could not find path to varcon.txt.')
+            else:
+                self.varcon_path = varcon_path
+        translations = get_translations(self.varcon_path)  # must be able to find this directory
         new_sp = {x[change_to] for x in translations}  # creates a set of spellings in the chosen dialect
         if change_to == 'American':
             change_sp = {x['British']: x['American'] for x in translations}  # British to American

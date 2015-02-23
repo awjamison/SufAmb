@@ -13,15 +13,15 @@ from corpus import Corpus
 from brit_spelling import change_spelling
 
 home = os.path.expanduser("~")
-path_to_ds = os.path.join(home, "Dropbox", "SufAmb", "master_list35_update3_words.csv")  # no nonwords
 corPath = os.path.join(home, "Dropbox", "corpora")
 elpPath = os.path.join(corPath, "ELP", "ELPfull.csv")
 slxPath = os.path.join(corPath, "SUBTLEX-US.csv")
 aoaPath = os.path.join(corPath, "AoA.csv")
+varconPath = os.path.join(corPath, "varcon.txt")
 
 if 'clx' not in globals():
-    path_to_clx = os.path.expanduser("~/Dropbox/corpora/CELEX_V2/english")
-    clx = Celex(path_to_clx)
+    clxPath = os.path.join(corPath, "CELEX_V2/english")
+    clx = Celex(clxPath)
     clx.load_lemmas()
     clx.load_wordforms()
     clx.map_lemmas_to_wordforms()
@@ -484,53 +484,3 @@ class LexVars(Corpus):
             return np.inf
         else:
             return -np.log2((a+smoothing_constant) / float(b+smoothing_constant))
-
-def debug():
-    lex = LexVars(path_to_ds)
-
-    # test all methods that use corpora with American spellings
-    lex.wordnet_synsets()
-    lex.synset_ratio()
-    lex.age_of_acquisition()
-    lex.levenshtein_distance()
-    lex.subtitles()
-    lex.subtlex_verb_ratio()
-
-    # test all methods that use CELEX with British spelling
-    brit_spell = [w['Word'] for w in clx._wordforms]
-    stems = [lex[w]['Stem'] for w in lex]
-    stems = change_spelling(stems, 'British', brit_spell)
-    lex._append_column(stems, 'lemma_headword')  # b/c lemma_headword method gets some headwords wrong
-    lex.change_spelling('British', brit_spell)
-    lex.inflectional_information(use_subtlex=False)
-    lex.derivational_family_size()
-    lex.derivational_family_entropy()
-    return lex
-
-def test_corr(measure, lexvars_objects=None):
-    """Tests correlations between entropy measures calculated using CELEX and SUBTLEX.
-
-    This demonstrates how small some of the correlations are!
-    """
-    if lexvars_objects is None:  # create the LexVars objects
-        lex = LexVars(path_to_ds)
-        brit_spell = [w['Word'] for w in clx._wordforms]
-        lex.change_spelling('British', brit_spell)  # change to brit spelling
-        stems = [lex[w]['Stem'] for w in lex]
-        stems = change_spelling(stems, 'British', brit_spell)
-        lex._append_column(stems, 'lemma_headword')
-        lexs = (lex.inflectional_information(use_subtlex=True), lex.inflectional_information(use_subtlex=False))
-    else:  # use already instantiated LexVars objects
-        lexs = lexvars_objects
-
-    l1, l2 = lexs
-    compare = [[l1[x][measure] for x in l1], [l2[y][measure] for y in l2]]
-    return np.corrcoef(compare)
-
-test_measures = ['H_wordforms', 'H_affixed_wordforms',
-                 'H_stem', 'H_stemS', 'H_stemEd', 'H_stemIng', 'H_stemAndstemS',
-                 'H_verbs', 'H_nouns', 'H_adjectives',
-                 ]
-
-def test_corrs(measures, lexvars_objects=None):
-    return {measure: test_corr(measure, lexvars_objects) for measure in measures}
