@@ -134,7 +134,7 @@ class LexVars(Corpus):
             new_column.append(ratio)
         self._append_column(new_column, new_var)
 
-    def get_subtlex_freq(self, word, part_of_speech=None, log_freq=False, warning=False):
+    def get_subtlex_freq(self, word, part_of_speech=None, measure='FREQcount', warning=False):
         """Returns count per million from SUBTLEX.
 
         When part of speech is specified in the optional second argument,
@@ -145,10 +145,7 @@ class LexVars(Corpus):
         one has reason to believe that all parts of speech after the second
         contribute negligibly to the total frequency count for the word.
         """
-        if log_freq:
-            total_freq = float(slx[word]['Lg10WF'])  # log10 count per million
-        else:
-            total_freq = float(slx[word]['SUBTLWF'])  # count per million
+        total_freq = float(slx[word][measure])  # count per million
         perc_dom = float(slx[word]['Percentage_dom_PoS'])
         categories = slx[word]['All_PoS_SUBTLEX'].split('.')
         if part_of_speech is None:
@@ -164,7 +161,7 @@ class LexVars(Corpus):
                   "'0' returned instead." % part_of_speech
         return 0
 
-    def subtlex_verb_ratio(self, log_freq=False):
+    def subtlex_verb_ratio(self, measure='FREQcount'):
         new_var = "slx_v_ratio"
         has_item = self.compare_items(slx)
         new_column = []
@@ -172,15 +169,15 @@ class LexVars(Corpus):
             self._warning_msg('subtlex_verb_ratio', slx)
         for record, exists in zip(self._dict, has_item):
             if exists:
-                total_freq = self.get_subtlex_freq(record, log_freq=log_freq)
-                verb_freq = self.get_subtlex_freq(record, 'Verb', log_freq=log_freq)
+                total_freq = self.get_subtlex_freq(record, measure=measure)
+                verb_freq = self.get_subtlex_freq(record, 'Verb', measure=measure)
                 ratio = verb_freq / float(total_freq)
             else:
                 ratio = None
             new_column.append(ratio)
         self._append_column(new_column, new_var)
 
-    def inflectional_information(self, use_subtlex=True, all_family_stats=False, smooth=1):
+    def inflectional_information(self, use_subtlex=True, use_measures=('freq', 'H', 'deltaH', 'I', 'deltaI'), smooth=1):
         """
         """
 
@@ -237,7 +234,7 @@ class LexVars(Corpus):
             all_wordforms = [wf for wf in all_wordforms if not 'rare_form' in wf.FlectType]  # remove rare forms
 
             in_slx = [w.Word in slx for w in all_wordforms]  # list of bools
-            counter = collections.Counter()
+            pos_counter = collections.Counter()
 
             for wf in all_wordforms:
                 features = wf.FlectType
@@ -247,17 +244,17 @@ class LexVars(Corpus):
                         # not all members of an inflectional family could be found in SUBTLEX.
                         # for this family use CELEX instead of SUBTLEX to calculate entropy.
                         # note that this will make token counts uninterpretable (currently just Lg10RootFre)
-                        counter[flect] += wf.Cob
+                        pos_counter[flect] += wf.Cob
                     else:
                         for pos in slx_pos_lookup[flect]:
-                            pos_freq = self.get_subtlex_freq(wf.Word, pos)
+                            pos_freq = self.get_subtlex_freq(wf.Word, pos, 'FREQcount')  # raw frequency count
                             flect_name = pos + '_' + flect.split('_')[1]
-                            counter[flect_name] = pos_freq  # SUBTLEX freqs are already summed, so just use '='
+                            pos_counter[flect_name] = pos_freq  # SUBTLEX freqs are already summed, so just use '='
                 else:
-                    counter[flect] += wf.Cob  # huge rounding error with freq/million, so just use raw count
+                    pos_counter[flect] += wf.Cob  # huge rounding error with freq/million, so just use raw count
 
             # after freqs are tallied, multiply all freqs by 1000 to reduce error from smoothing
-            counter = {k: counter[k] * 1000 for k in counter}
+            pos_counter = {k: pos_counter[k] * 1000 for k in pos_counter}
 
             # some helpful groupings
             affixes = ['Noun_s', 'Verb_s', 'Verb_ing', 'Adjective_ing', 'Verb_ed', 'Adjective_ed']
@@ -266,20 +263,39 @@ class LexVars(Corpus):
             adjectives = ['Adjective_ed', 'Adjective_ing']
 
             # frequency counts
-            f_affixes = [counter[i] for i in affixes if i in counter]
-            f_stem = [counter[i] for i in ['Noun_bare', 'Verb_bare'] if i in counter]
-            f_stemS = [counter[i] for i in ['Noun_s', 'Verb_s'] if i in counter]
-            f_stemEd = [counter[i] for i in ['Verb_ed', 'Adjective_ed'] if i in counter]
-            f_stemIng = [counter[i] for i in ['Verb_ing', 'Adjective_ing'] if i in counter]
-            f_Vstem = [counter['Verb_bare']]
-            f_Nstem = [counter['Noun_bare']]
-            f_VstemS = [counter['Verb_s']]
-            f_NstemS = [counter['Noun_s']]
-            f_VstemEd = [counter['Verb_ed']]
-            f_VstemIng = [counter['Verb_ing']]
-            f_nouns = [counter[i] for i in nouns if i in counter]
-            f_verbs = [counter[i] for i in verbs if i in counter]
-            f_adjs = [counter[i] for i in adjectives if i in counter]
+            f_affixes = [pos_counter[i] for i in affixes if i in pos_counter]
+            f_stem = [pos_counter[i] for i in ['Noun_bare', 'Verb_bare'] if i in pos_counter]
+            f_stemS = [pos_counter[i] for i in ['Noun_s', 'Verb_s'] if i in pos_counter]
+            f_stemEd = [pos_counter[i] for i in ['Verb_ed', 'Adjective_ed'] if i in pos_counter]
+            f_stemIng = [pos_counter[i] for i in ['Verb_ing', 'Adjective_ing'] if i in pos_counter]
+            f_Vstem = [pos_counter['Verb_bare']]
+            f_Nstem = [pos_counter['Noun_bare']]
+            f_VstemS = [pos_counter['Verb_s']]
+            f_NstemS = [pos_counter['Noun_s']]
+            f_VstemEd = [pos_counter['Verb_ed']]
+            f_VstemIng = [pos_counter['Verb_ing']]
+            f_nouns = [pos_counter[i] for i in nouns if i in pos_counter]
+            f_verbs = [pos_counter[i] for i in verbs if i in pos_counter]
+            f_adjs = [pos_counter[i] for i in adjectives if i in pos_counter]
+
+            # contains measures to be reported; updated based on use_measures parameter
+            measures = collections.OrderedDict()
+
+            if 'freq' in use_measures:
+                # record the frequencies of inflections within the family
+                # Underscore is used in the inflection name because we don't want these automatically condensed later
+                freq = [
+                    ('stem', sum(f_stem)),
+                    ('stem_S', sum(f_stemS)),
+                    ('stem_Ed', sum(f_stemEd)),
+                    ('stem_Ing', sum(f_stemIng)),
+                    ('Vstem', sum(f_Vstem)),
+                    ('Vstem_S', sum(f_VstemS)),
+                    ('Vstem_Ed', sum(f_VstemEd)),
+                    ('Vstem_Ing', sum(f_VstemIng))
+                ]
+                for name, measure in freq:
+                    measures['freq_'+name] = measure/1000  # return to original scale
 
             # table of frequency distributions
             dist = [
@@ -295,7 +311,7 @@ class LexVars(Corpus):
                 ('stemIng', f_stemIng),
                 ('stemAndstemS', f_stem + f_stemS),
                 ('verbs', f_verbs),
-                # sum verbal and adjectival variants of participles
+                # Vlemma_tokens: sum verbal and adjectival variants of participles
                 ('Vlemma_tokens', f_Vstem + f_VstemS + [sum(f_stemEd)] + [sum(f_stemIng)]),
                 ('nouns', f_nouns),
                 ('Nlemma_tokens', f_nouns),
@@ -303,112 +319,117 @@ class LexVars(Corpus):
             ]
             dist = collections.OrderedDict(dist)
 
-            # calculate entropy measures from frequency distributions
-            H = [('H_'+x, self.entropy(dist[x], smooth)) for x in dist]
-            H = collections.OrderedDict(H)
+            # get the root frequency (calculated from inflectional families)
+            measures['Lg10RootFre'] = np.log10(sum(dist['wordforms']) / float(1000))  # was multiplied by 1000 earlier
 
-            # calculate change in entropy from prior to posterior distribution
-            deltaH = [
-                ('stem_pos', H['H_pos_tokens'] - H['H_stem']),
-                ('stem_lemma', H['H_lemma_tokens'] - H['H_stem']),
-                ('stemS_pos', H['H_pos_tokens'] - H['H_stemS']),
-                ('stemS_lemma', H['H_lemma_tokens'] - H['H_stemS']),
-                ('stemEd_pos', H['H_pos_tokens'] - H['H_stemEd']),
-                ('stemIng_pos', H['H_pos_tokens'] - H['H_stemIng']),
-                ('verb_pos', H['H_pos_tokens'] - H['H_verbs']),
-                ('verb_lemma', H['H_lemma_tokens'] - H['H_verbs']),
-                ('Vlemma_lemma', H['H_lemma_tokens'] - H['H_Vlemma_tokens']),
-                ('noun_pos', H['H_pos_tokens'] - H['H_nouns']),
-                ('noun_lemma', H['H_lemma_tokens'] - H['H_nouns']),
-                ('Nlemma_lemma', H['H_lemma_tokens'] - H['H_Nlemma_tokens'])
-            ]
-            deltaH = [('deltaH_'+x[0], x[1]) for x in deltaH]
-            deltaH = collections.OrderedDict(deltaH)
+            if 'H' in use_measures or deltaH in use_measures:
+                # calculate entropy measures from frequency distributions
+                for measure in dist:
+                    measures['H_'+measure] = self.entropy(dist[measure], smooth)
 
-            # calculate frequency ratios (simple transition probabilities)
-            root_total = float(sum(dist['wordforms']))
-            affixes_total = float(sum(dist['affixed_wordforms']))
-            verbs_total = float(sum(dist['verbs']))
-            Vlemma_total = float(sum(dist['Vlemma_tokens']))
-            nouns_total = float(sum(dist['nouns']))
-            stem_total = float(sum(dist['stem']))
-            stemS_total = float(sum(dist['stemS']))
-            stemEd_total = float(sum(dist['stemEd']))
-            stemIng_total = float(sum(dist['stemIng']))
-            ratios = [
-                ('stem_root', (sum(dist['stem']), root_total)),
-                ('stemS_root', (sum(dist['stemS']), root_total)),
-                ('stemEd_root', (sum(dist['stemEd']), root_total)),
-                ('stemIng_root', (sum(dist['stemIng']), root_total)),
-                ('stemS_affixes', (sum(dist['stemS']), affixes_total)),
-                ('stemEd_affixes', (sum(dist['stemEd']), affixes_total)),
-                ('stemIng_affixes', (sum(dist['stemIng']), affixes_total)),
-                ('Vlemma_root', (Vlemma_total, root_total)),
-                ('verb_root', (verbs_total, root_total)),
-                ('noun_root', (nouns_total, root_total)),
-                ('Vstem_root', (f_Vstem[0], root_total)),
-                ('VstemS_root', (f_VstemS[0], root_total)),
-                ('VstemEd_root', (f_VstemEd[0], root_total)),
-                ('VstemIng_root', (f_VstemIng[0], root_total)),
-                ('Nstem_root', (f_Nstem[0], root_total)),
-                ('NstemS_root', (f_NstemS[0], root_total)),
-                ('Vstem_Vlemma', (f_Vstem[0], Vlemma_total)),
-                ('VstemS_Vlemma', (f_VstemS[0], Vlemma_total)),
-                ('VstemEd_Vlemma', (f_VstemEd[0], Vlemma_total)),
-                ('VstemIng_Vlemma', (f_VstemIng[0], Vlemma_total)),
-                ('Vstem_verb', (f_Vstem[0], verbs_total)),
-                ('VstemS_verb', (f_VstemS[0], verbs_total)),
-                ('VstemEd_verb', (f_VstemEd[0], verbs_total)),
-                ('VstemIng_verb', (f_VstemIng[0], verbs_total)),
-                ('Nstem_noun', (f_Nstem[0], nouns_total)),
-                ('NstemS_noun', (f_NstemS[0], nouns_total)),
-                ('Vstem_stem', (f_Vstem[0], stem_total)),
-                ('Nstem_stem', (f_Nstem[0], stem_total)),
-                ('VstemS_stemS', (f_VstemS[0], stemS_total)),
-                ('NstemS_stemS', (f_NstemS[0], stemS_total)),
-                ('VstemEd_stemEd', (f_VstemEd[0], stemEd_total)),
-                ('VstemIng_stemIng', (f_VstemIng[0], stemIng_total)),
-                ('stemEd_Vlemma', (sum(dist['stemEd']), Vlemma_total)),
-                ('stemIng_Vlemma', (sum(dist['stemIng']), Vlemma_total)),
-            ]
+            if 'deltaH' in use_measures:
+                # calculate change in entropy from prior to posterior distribution
+                deltaH = [
+                    ('stem_pos', measures['H_pos_tokens'] - measures['H_stem']),
+                    ('stem_lemma', measures['H_lemma_tokens'] - measures['H_stem']),
+                    ('stemS_pos', measures['H_pos_tokens'] - measures['H_stemS']),
+                    ('stemS_lemma', measures['H_lemma_tokens'] - measures['H_stemS']),
+                    ('stemEd_pos', measures['H_pos_tokens'] - measures['H_stemEd']),
+                    ('stemIng_pos', measures['H_pos_tokens'] - measures['H_stemIng']),
+                    ('verb_pos', measures['H_pos_tokens'] - measures['H_verbs']),
+                    ('verb_lemma', measures['H_lemma_tokens'] - measures['H_verbs']),
+                    ('Vlemma_lemma', measures['H_lemma_tokens'] - measures['H_Vlemma_tokens']),
+                    ('noun_pos', measures['H_pos_tokens'] - measures['H_nouns']),
+                    ('noun_lemma', measures['H_lemma_tokens'] - measures['H_nouns']),
+                    ('Nlemma_lemma', measures['H_lemma_tokens'] - measures['H_Nlemma_tokens'])
+                ]
+                for name, measure in deltaH:
+                    measures['deltaH_'+name] = measure
 
-            # calculate surprisal from frequency ratios
-            I = [('I_'+x[0], self.surprisal(x[1][0], x[1][1])) for x in ratios]
-            I = collections.OrderedDict(I)
-            I['Lg10RootFre'] = np.log10(sum(dist['wordforms']) / float(1000))  # was multiplied by 1000 earlier
+            if 'I' in use_measures or 'deltaI' in use_measures:
+                # calculate frequency ratios (simple transition probabilities)
+                root_total = float(sum(dist['wordforms']))
+                affixes_total = float(sum(dist['affixed_wordforms']))
+                verbs_total = float(sum(dist['verbs']))
+                Vlemma_total = float(sum(dist['Vlemma_tokens']))
+                nouns_total = float(sum(dist['nouns']))
+                stem_total = float(sum(dist['stem']))
+                stemS_total = float(sum(dist['stemS']))
+                stemEd_total = float(sum(dist['stemEd']))
+                stemIng_total = float(sum(dist['stemIng']))
+                ratios = [
+                    ('stem_root', (sum(dist['stem']), root_total)),
+                    ('stemS_root', (sum(dist['stemS']), root_total)),
+                    ('stemEd_root', (sum(dist['stemEd']), root_total)),
+                    ('stemIng_root', (sum(dist['stemIng']), root_total)),
+                    ('stemS_affixes', (sum(dist['stemS']), affixes_total)),
+                    ('stemEd_affixes', (sum(dist['stemEd']), affixes_total)),
+                    ('stemIng_affixes', (sum(dist['stemIng']), affixes_total)),
+                    ('Vlemma_root', (Vlemma_total, root_total)),
+                    ('verb_root', (verbs_total, root_total)),
+                    ('noun_root', (nouns_total, root_total)),
+                    ('Vstem_root', (f_Vstem[0], root_total)),
+                    ('VstemS_root', (f_VstemS[0], root_total)),
+                    ('VstemEd_root', (f_VstemEd[0], root_total)),
+                    ('VstemIng_root', (f_VstemIng[0], root_total)),
+                    ('Nstem_root', (f_Nstem[0], root_total)),
+                    ('NstemS_root', (f_NstemS[0], root_total)),
+                    ('Vstem_Vlemma', (f_Vstem[0], Vlemma_total)),
+                    ('VstemS_Vlemma', (f_VstemS[0], Vlemma_total)),
+                    ('VstemEd_Vlemma', (f_VstemEd[0], Vlemma_total)),
+                    ('VstemIng_Vlemma', (f_VstemIng[0], Vlemma_total)),
+                    ('Vstem_verb', (f_Vstem[0], verbs_total)),
+                    ('VstemS_verb', (f_VstemS[0], verbs_total)),
+                    ('VstemEd_verb', (f_VstemEd[0], verbs_total)),
+                    ('VstemIng_verb', (f_VstemIng[0], verbs_total)),
+                    ('Nstem_noun', (f_Nstem[0], nouns_total)),
+                    ('NstemS_noun', (f_NstemS[0], nouns_total)),
+                    ('Vstem_stem', (f_Vstem[0], stem_total)),
+                    ('Nstem_stem', (f_Nstem[0], stem_total)),
+                    ('VstemS_stemS', (f_VstemS[0], stemS_total)),
+                    ('NstemS_stemS', (f_NstemS[0], stemS_total)),
+                    ('VstemEd_stemEd', (f_VstemEd[0], stemEd_total)),
+                    ('VstemIng_stemIng', (f_VstemIng[0], stemIng_total)),
+                    ('stemEd_Vlemma', (sum(dist['stemEd']), Vlemma_total)),
+                    ('stemIng_Vlemma', (sum(dist['stemIng']), Vlemma_total)),
+                ]
+                # calculate surprisal from frequency ratios
+                for name, measure in ratios:
+                    measures['I_'+name] = self.surprisal(measure[0], measure[1])
 
-            # surprisal for complex transition probabilities (multiple transitions)
-            transitions = [
-                ('Vstem_Vlemma_root', (I['I_Vstem_Vlemma'], I['I_Vlemma_root'])),
-                ('Vstem_verb_root', (I['I_Vstem_verb'], I['I_verb_root'])),
-                ('Vstem_stem_root', (I['I_Vstem_stem'], I['I_stem_root'])),
-                ('VstemS_Vlemma_root', (I['I_VstemS_Vlemma'], I['I_Vlemma_root'])),
-                ('VstemS_verb_root', (I['I_VstemS_verb'], I['I_verb_root'])),
-                ('VstemS_stemS_root', (I['I_VstemS_stemS'], I['I_stemS_root'])),
-                ('VstemEd_Vlemma_root', (I['I_VstemEd_Vlemma'], I['I_Vlemma_root'])),
-                ('VstemEd_verb_root', (I['I_VstemEd_verb'], I['I_verb_root'])),
-                ('VstemEd_stemEd_root', (I['I_VstemEd_stemEd'], I['I_stemEd_root'])),
-                ('VstemIng_Vlemma_root', (I['I_VstemIng_Vlemma'], I['I_Vlemma_root'])),
-                ('VstemIng_verb_root', (I['I_VstemIng_verb'], I['I_verb_root'])),
-                ('VstemIng_stemIng_root', (I['I_VstemIng_stemIng'], I['I_stemIng_root'])),
-                ('Nstem_noun_root', (I['I_Nstem_noun'], I['I_noun_root'])),
-                ('Nstem_stem_root', (I['I_Nstem_stem'], I['I_stem_root'])),
-                ('NstemS_noun_root', (I['I_NstemS_noun'], I['I_noun_root'])),
-                ('NstemS_stemS_root', (I['I_NstemS_stemS'], I['I_stemS_root']))
-            ]
-            deltaI = [('deltaI_'+x[0], x[1][0] + x[1][1]) for x in transitions]  # note this is + not -
-            deltaI = collections.OrderedDict(deltaI)
+            if 'deltaI' in use_measures:
+                # surprisal for complex transition probabilities (multiple transitions)
+                transitions = [
+                    ('Vstem_Vlemma_root', (measures['I_Vstem_Vlemma'], measures['I_Vlemma_root'])),
+                    ('Vstem_verb_root', (measures['I_Vstem_verb'], measures['I_verb_root'])),
+                    ('Vstem_stem_root', (measures['I_Vstem_stem'], measures['I_stem_root'])),
+                    ('VstemS_Vlemma_root', (measures['I_VstemS_Vlemma'], measures['I_Vlemma_root'])),
+                    ('VstemS_verb_root', (measures['I_VstemS_verb'], measures['I_verb_root'])),
+                    ('VstemS_stemS_root', (measures['I_VstemS_stemS'], measures['I_stemS_root'])),
+                    ('VstemEd_Vlemma_root', (measures['I_VstemEd_Vlemma'], measures['I_Vlemma_root'])),
+                    ('VstemEd_verb_root', (measures['I_VstemEd_verb'], measures['I_verb_root'])),
+                    ('VstemEd_stemEd_root', (measures['I_VstemEd_stemEd'], measures['I_stemEd_root'])),
+                    ('VstemIng_Vlemma_root', (measures['I_VstemIng_Vlemma'], measures['I_Vlemma_root'])),
+                    ('VstemIng_verb_root', (measures['I_VstemIng_verb'], measures['I_verb_root'])),
+                    ('VstemIng_stemIng_root', (measures['I_VstemIng_stemIng'], measures['I_stemIng_root'])),
+                    ('Nstem_noun_root', (measures['I_Nstem_noun'], measures['I_noun_root'])),
+                    ('Nstem_stem_root', (measures['I_Nstem_stem'], measures['I_stem_root'])),
+                    ('NstemS_noun_root', (measures['I_NstemS_noun'], measures['I_noun_root'])),
+                    ('NstemS_stemS_root', (measures['I_NstemS_stemS'], measures['I_stemS_root']))
+                ]
+                for name, measure in transitions:
+                    measures['deltaI_'+name] = measure[0] + measure[1]  # note this is + not -
 
-            for group in [H, deltaH, I, deltaI]:
-                for measure in group:
-                    if use_subtlex:
-                        corpus_prefix = 'slx'  # add prefix to indicate which corpus was used
-                    else:
-                        corpus_prefix = 'clx'
-                    self._dict[record][corpus_prefix + '_' + measure] = group[measure]
-                    if get_fieldnames:
-                        if not measure in self.fieldnames:  # avoid duplicating fieldnames
-                            self.fieldnames.append(corpus_prefix + '_' + measure)
+            for measure in measures:
+                if use_subtlex:
+                    corpus_prefix = 'slx_'  # add prefix to indicate which corpus was used
+                else:
+                    corpus_prefix = 'clx_'
+                name = corpus_prefix + measure
+                self._dict[record][name] = measures[measure]
+                if get_fieldnames:
+                    if not name in self.fieldnames:  # avoid duplicating fieldnames
+                        self.fieldnames.append(name)
             get_fieldnames = False
 
         if warn_msg is True:
