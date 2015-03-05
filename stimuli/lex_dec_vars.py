@@ -371,7 +371,7 @@ class LexVars(Corpus):
                     ('Nlemma_root', (Nlemma_total, root_total)),
                     ('verb_root', (verbs_total, root_total)),
                     ('noun_root', (nouns_total, root_total)),
-                    ('adj_root'), (adjectives_total, root_total),
+                    ('adj_root', (adjectives_total, root_total)),
                     ('Vstem_root', (f_Vstem[0], root_total)),
                     ('VstemS_root', (f_VstemS[0], root_total)),
                     ('VstemEd_root', (f_VstemEd[0], root_total)),
