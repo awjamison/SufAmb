@@ -40,7 +40,9 @@ def test_all():
 
     # condense variables
     contrasts = [('stem', 'stemS', 'stemEd'), ('stem', 'stemS')]
-    replace_id_with = ['word', 'word']
+    replace_id_with = ['word', 'word', 'word']
+    #('Stem', 'sSfx', 'edSfx')
+    #('Root', 'RootS', 'RootEd')
     lex.condense_by_contrasts('Type', contrasts, replace_id_with, index=None, remove_old=True)
     return lex
 

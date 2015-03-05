@@ -351,8 +351,10 @@ class LexVars(Corpus):
                 root_total = float(sum(dist['wordforms']))
                 affixes_total = float(sum(dist['affixed_wordforms']))
                 verbs_total = float(sum(dist['verbs']))
-                Vlemma_total = float(sum(dist['Vlemma_tokens']))
                 nouns_total = float(sum(dist['nouns']))
+                adjectives_total = float(sum(dist['adjectives']))
+                Vlemma_total = float(sum(dist['Vlemma_tokens']))
+                Nlemma_total = float(sum(dist['Nlemma_tokens']))
                 stem_total = float(sum(dist['stem']))
                 stemS_total = float(sum(dist['stemS']))
                 stemEd_total = float(sum(dist['stemEd']))
@@ -366,8 +368,10 @@ class LexVars(Corpus):
                     ('stemEd_affixes', (sum(dist['stemEd']), affixes_total)),
                     ('stemIng_affixes', (sum(dist['stemIng']), affixes_total)),
                     ('Vlemma_root', (Vlemma_total, root_total)),
+                    ('Nlemma_root', (Nlemma_total, root_total)),
                     ('verb_root', (verbs_total, root_total)),
                     ('noun_root', (nouns_total, root_total)),
+                    ('adj_root'), (adjectives_total, root_total),
                     ('Vstem_root', (f_Vstem[0], root_total)),
                     ('VstemS_root', (f_VstemS[0], root_total)),
                     ('VstemEd_root', (f_VstemEd[0], root_total)),
