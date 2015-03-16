@@ -48,7 +48,7 @@ class SufAmb(MneExperiment):
                                         '{subject}_s*_stimuli_log.txt'),
                }
                
-    _defaults = {'cov': 'epoch450bl',
+    defaults = {'cov': 'auto',
                  'raw': '1-40',
                  'epoch': 'epoch_behav_fltr',
                  'rej': 'man',
