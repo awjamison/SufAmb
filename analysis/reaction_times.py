@@ -13,7 +13,7 @@ try:
 except ValueError: pass
 
 masterPath = os.path.join('/Volumes','BackUp','sufAmb_stimuli','stimuli',
-                          'stim_properties','master_list35_update3.txt')
+                          'stim_properties','master_list35_update6.txt')
 
 masterRT = load.tsv(masterPath) # complete set of stimuli and properties
 
@@ -120,7 +120,7 @@ def resp_accuracy(ds):
     return ds
    
                 
-def resp_latency(ds, cutoff=3, sd=3.5):
+def resp_latency(ds, lower_cutoff=0.25, upper_cutoff=1.5, sd=4.5):
     """
     Throw out RTs that are too fast or too short. First filter by cutoff, then by sd
     WARNING: must be same order as original log file!
@@ -129,19 +129,19 @@ def resp_latency(ds, cutoff=3, sd=3.5):
     RTs = [float(x) for x in ds['RT']]
     total = len([float(x) for x in ds['RT']])
     # record # of long RTs
-    longRTs = len([x for x in RTs if x < 0 or x > cutoff])
+    badRTs = len([x for x in RTs if x < lower_cutoff or x > upper_cutoff])
     # eliminate timeouts (> 4 seconds) for outlier calculation
     RTs = [x for x in RTs if x >= 0]
     # eliminate long responses for outlier calculation
-    RTs = [x for x in RTs if x <= cutoff]
+    RTs = [x for x in RTs if x >= lower_cutoff and x <= upper_cutoff]
     # descriptive statistics 
     meanRT = np.mean(RTs)
     stdRT = np.std(RTs)
     upper = meanRT + sd * stdRT
     lower = meanRT - sd * stdRT
     outliers = len([x for x in RTs if x > upper or x < lower])
-    percentage = float(total - longRTs - outliers) / total
-    print 'Mean: %f, SD: %f, Long RTs: %i, Outliers: %i' % (meanRT, stdRT, longRTs, outliers)
+    percentage = float(total - badRTs - outliers) / total
+    print 'Mean: %f, SD: %f, Long RTs: %i, Outliers: %i' % (meanRT, stdRT, badRTs, outliers)
     print 'Percent with good latency: %f' % percentage
     
     GoodLatency = []
