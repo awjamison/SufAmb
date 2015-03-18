@@ -60,7 +60,7 @@ class SufAmb(MneExperiment):
     tests = {'TypeXDominanceCategory':('anova', 'Type%DominanceCategory', 'Type*DominanceCategory*subject'),
              }
     
-    parcs = ['', 'frontal_temporal_parietal']
+    parcs = ['', 'frontal_temporal_parietal', 'SufAmb_aparc', 'SufAmb_Brodmann']
 
     def label_events(self, ds, experiment, subject):
         """
