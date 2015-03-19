@@ -2,47 +2,37 @@ import os
 import numpy as np
 from eelbrain import load, Var, Factor, combine
 
-
 logPath = os.path.join('/Volumes','BackUp','sufAmb_behavioral', 'raw')
-
-logNames = os.listdir(logPath)
-
-# remove other files in the directory
-try:
-    logNames.remove('.DS_Store')
-except ValueError: pass
-
 masterPath = os.path.join('/Volumes','BackUp','sufAmb_stimuli','stimuli',
                           'stim_properties','master_list35_update6.txt')
-
 masterRT = load.tsv(masterPath) # complete set of stimuli and properties
 
-logs = []
+def load_logs(log_path=logPath):
 
-for s in logNames:
-    
-    path = os.path.join(logPath, s)
-    
-    log = load.tsv(path, names=['Key','Button','RT',
-                                'Abs_RT','Shown','Tag',
-                                'Experiment', 'Trial','Condition',
-                                'Stimulus', 'Trigger', 'Correct'], 
-                                start_tag='START',
-                                ignore_missing=True)
-                                
-    # filter lines by:       
-    # unanalyzed screens                   
-    log = log[log['Shown'].isnot('Paragraph')]
-    log = log[log['Experiment'].isnot('practice')]
-    log = log[log['Stimulus'].isnot('')]
-    del log['Condition']
-    
-    logs.append(log)
+    log_names = os.listdir(log_path)
 
-print 'Done reading log files.'
+    # remove other files in the directory
+    if '.DS_Store' in log_names:
+        log_names.remove('.DS_Store')
+    if 'old' in log_names:
+        log_names.remove('old')
 
+    logs = []
+    for s in log_names:
+        path = os.path.join(logPath, s)
+        log = load.tsv(path)
+        log.info['name'] = log.name  # store name here b/c log.name gets reset
+        # fix 'spread(s)'
+        log = log[log['Stimulus'].isnot('spread', 'spreads')]
+        if log.info['name'] == 'R0823_s1_stimuli_data.txt': # this subject doesn't have the same nonword stimuli
+            log = log[log['Correct'].isnot('NotWord')]
+        log.name = s
+        logs.append(log)
 
-def get_word_info(logs=logs):
+    print 'Done reading log files.'
+    return logs
+
+def get_word_info(logs=load_logs(), master_rt=masterRT):
     """
     Adds word properties to the log file. Preserves order of presentation in the log file.
     """
@@ -50,33 +40,21 @@ def get_word_info(logs=logs):
     dss = []   
     for log in logs:
         
-        # fix Brit spelling and 'spread(s)'
-        log = log[log['Stimulus'].isnot('spread', 'spreads')]
-        brit = {'favour':'favor', 'favours':'favors', 'favoured':'favored', 
-                'honour':'honor', 'honours':'honors', 'honoured':'honored'}
-        for w in brit:
-            try:
-                i = log['Stimulus'].index(w)
-                log['Stimulus'][i] = brit[w]
-            except KeyError: pass
-        if log.name == 'R0823_s1_stimuli_data.txt': # this subject doesn't have the same nonword stimuli
-            log = log[log['Correct'].isnot('NotWord')]
-        
-        ds = masterRT[masterRT['Word'].isin(log['Stimulus'])] #look up words in master list if present in log
+        ds = master_rt[master_rt['Word'].isin(log['Stimulus'])]  # look up words in master_rt ONLY IF in log
 
-        wordMap = dict((w,i) for i,w in enumerate(list(log['Stimulus']))) # create an index based on order presented
+        wordMap = dict((w,i) for i,w in enumerate(list(log['Stimulus'])))  # create an index based on order presented
         index = [] # copy the index to ds
         for case in range(ds.n_cases):
             w = ds[case]['Word']
             i = wordMap[w]
             index.append(i)
         ds['index'] = Var(index)
-        ds.sort('index') # align rows of ds and log
-        ds.update(log) # concatenate ds and log
+        ds.sort('index')  # align rows of ds and log
+        ds.update(log)  # concatenate ds and log
         orderrun = Var( [int(log.name.split('_')[1][1:])] * ds.n_cases ) 
         subject = Factor([log.name[:5]] * ds.n_cases)
-        ds['OrderRun'] = orderrun #order in which subject was run
-        ds['Subject'] = subject #first five characters give R number
+        ds['OrderRun'] = orderrun  # order in which subject was run
+        ds['Subject'] = subject  # first five characters give R number
         ds.name = log.name[:5] 
         dss.append(ds)
         print ds.name
@@ -157,19 +135,19 @@ def resp_latency(ds, lower_cutoff=0.25, upper_cutoff=1.5, sd=4.5):
         
         if row > 0: # first row has no preceding RT
             if float(ds['RT'][row-1]) < 0 :
-                PrecedingRT.append('4.0') # set timeouts = 4 seconds
+                PrecedingRT.append('4.0')  # set timeouts = 4 seconds
             else:
                 PrecedingRT.append(ds['RT'][row-1])   
             
         if row > 1: # for Preceding2RT
             if float(ds['RT'][row-2]) < 0 :
-                Preceding2RT.append('4.0') # set timeouts = 4 seconds
+                Preceding2RT.append('4.0')  # set timeouts = 4 seconds
             else:
                 Preceding2RT.append(ds['RT'][row-2])
                 
         if row > 2: # for Preceding3RT
             if float(ds['RT'][row-3]) < 0 :
-                Preceding3RT.append('4.0') # set timeouts = 4 seconds
+                Preceding3RT.append('4.0')  # set timeouts = 4 seconds
             else:
                 Preceding3RT.append(ds['RT'][row-3])
 
