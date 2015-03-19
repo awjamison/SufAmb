@@ -75,15 +75,15 @@ def resp_accuracy(ds):
     wCorrect = []
     nwCorrect = []
     for row in range(ds.n_cases):
-        if responseKey[ ds[row]['Button'] ] == ds[row]['Correct']:
+        if responseKey[ str(ds[row]['Button']) ] == ds[row]['Correct']:
             IsCorrect.append(1)
-            if responseKey[ ds[row]['Button'] ] == 'IsWord':
+            if responseKey[ str(ds[row]['Button']) ] == 'IsWord':
                 wCorrect.append(1)
             else:
                 nwCorrect.append(1)
         else:
             IsCorrect.append(0)
-            if responseKey[ ds[row]['Button'] ] == 'IsWord':
+            if responseKey[ str(ds[row]['Button']) ] == 'IsWord':
                 wCorrect.append(0)
             else:
                 nwCorrect.append(0)
