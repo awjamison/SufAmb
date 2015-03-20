@@ -69,7 +69,6 @@ class SufAmb(MneExperiment):
         # TODO keep button press triggers. Figure out which to get rid of in ~/raw/evts
 
         log = self.load_log()
-        log = log[log['RealWord'] == 1]  # event file currently does not contain nonwords
 
         ds.update(log)  # combine
 
@@ -77,11 +76,12 @@ class SufAmb(MneExperiment):
 
         return ds
 
-    def load_log(self, subject=None):
+    def load_log(self):
         """Loads the log of what stimulus screen was presented and combines the log with
         stimuli variables and behavioral statistics.
         """
 
+        subject = self.get('subject')
         self.set(subject=subject)
 
         # load the log file
@@ -92,8 +92,7 @@ class SufAmb(MneExperiment):
 
         # load the processed behavioral file + stimulus variables
         if subject == None:
-            log.sort('AbsTime')  # make sure log file is sorted by time
-            return log
+            raise ValueError("Subject cannot be 'None'")
         else:
             try:
                 rtPath = os.path.join('/Volumes','BackUp','sufAmb_behavioral','combined',subject+'.txt')
