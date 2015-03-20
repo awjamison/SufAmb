@@ -31,111 +31,92 @@ class SufAmb(MneExperiment):
     
     bad_channels = bad_channels
     
-    epochs = {
-              'epoch': dict(sel="BeforeOrAfter.isnot('0','128')", tmin=-0.15, tmax=0.6),
-              'epochbl': dict(sel_epoch='epoch', tmin=-0.15, tmax=0),
-              'epoch450': dict(sel="BeforeOrAfter != '128'", tmin=-0.15, tmax=0.45),
-              'epoch450bl': dict(sel_epoch='epoch450', tmin=-0.15, tmax=0),
-              'epoch_behav_fltr': dict(sel_epoch='epoch450', sel="GoodResponse == 1", tmin=-0.15, tmax=0.45),
+    epochs = {'100-600': dict(sel="BeforeOrAfter != '128'", tmin=-0.15, tmax=0.6),
+              '150-450': dict(sel="BeforeOrAfter != '128'", tmin=-0.15, tmax=0.45),
+              '150-450bl': dict(sel_epoch='150-450', tmin=-0.15, tmax=0),
+              '150-450_behav_fltr': dict(sel_epoch='150-450', sel="GoodResponse == 1", tmin=-0.15, tmax=0.45),
               }
 
     _eog_sns = ['MEG 143', 'MEG 151']
     
     _values = {'experiment': ('sufAmb'),
-
                'log-dir': os.path.join('{meg-dir}', 'log'),
                'log-file': os.path.join('{log-dir}', 
                                         '{subject}_s*_stimuli_log.txt'),
                }
                
-    defaults = {'cov': 'auto',
+    defaults = {'cov': 'bestreg',
                  'raw': '1-40',
-                 'epoch': 'epoch_behav_fltr',
+                 'epoch': '150-450_behav_fltr',
                  'rej': 'man',
                  'model': 'Condition',
-                 'parc': 'frontal_temporal_parietal',
+                 'parc': 'SufAmb_aparc',
                  'src': 'ico-4'
                  }
     
-    tests = {'TypeXDominanceCategory':('anova', 'Type%DominanceCategory', 'Type*DominanceCategory*subject'),
-             }
-    
     parcs = ['', 'frontal_temporal_parietal', 'SufAmb_aparc', 'SufAmb_Brodmann']
 
-    def label_events(self, ds, experiment, subject):
+    def label_events(self, ds):
+        """ Wrapper for MneExperiment.label_events (which it overwrites).
+        Combines ds of stimuli variables/behavioral statistics with the event file from ~/raw.
+        This means epoch files will contain all necessary information for statistical tests, which
+        obviates merging the epoch files and stat files later.
         """
-        Returns
-        -------
-        ds : Dataset
-            Same object as input ds, modified in place.
-        """
-        ds = MneExperiment.label_events(self, ds, experiment, subject)
-        
-        dontinclude = ds['trigger'].isnot(128)
-        ds = ds[dontinclude]
-        
-        log = self.load_log()
-        ds.update(log)
-        
-        ds['Trigger'] = Var( [int(x) for x in ds['Trigger']] ) # make sure Trigger is type Var
-        
-        # add subject label
-        ds['Subject'] = Factor([subject], rep=ds.n_cases, random=True)
 
-        # find corresponding behavioral file
+        ds = MneExperiment.label_events(self, ds)
+
+        ds = ds[ds['trigger'].isnot(128)]
+        # TODO keep button press triggers. Figure out which to get rid of in ~/raw/evts
+
+        log = self.load_log()
+        log = log[log['RealWord'] == 1]  # event file currently does not contain nonwords
+
+        ds.update(log)  # combine
+
+        ds['Trigger'] = Var( [int(x) for x in ds['Trigger']] ) # make sure Trigger is type Var
+
+        return ds
+
+    def load_log(self, subject=None):
+        """Loads the log of what stimulus screen was presented and combines the log with
+        stimuli variables and behavioral statistics.
+        """
+
+        self.set(subject=subject)
+
+        # load the log file
+        path = self.get('log-file', fmatch=True)
+        log = load.tsv(path)
+        log = log[log['BeforeOrAfter'].isnot(128)]  # remove triggers to button press
+        # TODO keep button press triggers. Requires mangling rt to repeat each row
+
+        # load the processed behavioral file + stimulus variables
         if subject == None:
-            return ds
+            log.sort('AbsTime')  # make sure log file is sorted by time
+            return log
         else:
             try:
                 rtPath = os.path.join('/Volumes','BackUp','sufAmb_behavioral','combined',subject+'.txt')
                 rt = load.tsv(rtPath)
             except IOError:
                 raise IOError('Could not find behavioral file for %s.' % subject)
-                    
-        ds = ds[ds['Stimulus'].isin(rt['Word'])]
-        rt = rt[rt['Word'].isin(ds['Stimulus'])]
-        
-        # IMPORTANT: use order of words in ds, sort rt to match this order
-        wordMap = dict((w,i) for i,w in enumerate(list(ds['Stimulus']))) # note order of words in ds
+
+        # combine the log file and behavioral/stim variable files
+        wordMap = dict((w,i) for i,w in enumerate(list(log['Stimulus'])))  # note order of words in log
         index = []
-        for case in range(rt.n_cases): 
+        for case in range(rt.n_cases):
             w = rt[case]['Word']
             i = wordMap[w]
             index.append(i)
         rt['index'] = Var(index)
-        rt.sort('index') # align rows of ds with rt
-        
-        ds.update(rt, replace=False, info=False)
-        
-        return ds
+        rt.sort('index')  # align rows of log with rt
+        log.update(rt, replace=False, info=False)  # combine
 
-    def load_log(self, subject=None):
+        log = log[log['RealWord'] == 1]  # event file currently does not contain nonwords
 
-        self.set(subject=subject)
+        log.sort('AbsTime')  # make sure log file is sorted by time
 
-        # trial list
-        path = self.get('log-file', fmatch=True)
-        ds = load.tsv(path, names=['StimOrTrig','ScreenType','BeforeOrAfter',
-                                   'AbsTime','PracOrExper','TrialNum',
-                                   'Condition', 'Stimulus','Trigger',
-                                   'WordOrNonword'], start_tag='START',
-                                   ignore_missing=True)
-        
-        # filter lines        
-        # non-trigger screens                   
-        index = ds['StimOrTrig'].isnot('STIM')
-        # intermissions
-        index = logical_and(index, ds['BeforeOrAfter'].isnot('', 'Tag'))
-        # nonwords 
-        index = logical_and(index, ds['BeforeOrAfter'].isnot('0'))
-        # button press response -- ignore this for later version
-        index = logical_and(index, ds['BeforeOrAfter'].isnot('128'))                 
-                               
-        ds = ds[index]
-        
-        del ds['Condition']
-
-        return ds
+        return log
 
 # don't print a bunch of info
 set_log_level('warning')
@@ -151,7 +132,7 @@ else:
 # Number of good trials per condition
 # total: table.frequencies(Y='accept',ds=e.load_selected_events(reject='keep'))
 # by condition: # print table.frequencies(Y='Condition',ds=e.load_selected_events(reject='keep').sub("accept==True"))
-            
+
 #e.set_inv(ori, depth, reg, snr, method, pick_normal)
 #e.load_inv(fiff)
 

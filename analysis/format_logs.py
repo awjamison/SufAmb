@@ -29,7 +29,7 @@ def reformat_logs():
                 ds = ds[ds['Shown'].isnot('Paragraph')]
                 ds = ds[ds['Experiment'].isnot('practice')]
                 ds = ds[ds['Stimulus'].isnot('')]
-                del ds['Condition']
+                del ds['Condition']  # shadows 'Condition' from rt file and causes weird problem with update()
                 if f == 'R0823_s1_stimuli_data.txt':  # change british spelling for this subject
                     brit = {'favour':'favor', 'favours':'favors', 'favoured':'favored',
                             'honour':'honor', 'honours':'honors', 'honoured':'honored'}
@@ -48,6 +48,7 @@ def reformat_logs():
                 # filter unanlayzed screens
                 ds = ds[ds['StimOrTrig'].isnot('STIM')]
                 ds = ds[ds['BeforeOrAfter'].isnot('', 'Tag')]  # intermissions
+                del ds['Condition']  # shadows 'Condition' from rt file and causes weird problem with update()
                 if f == 'R0823_s1_stimuli_log.txt':  # change british spelling for this subject
                     brit = {'favour':'favor', 'favours':'favors', 'favoured':'favored',
                             'honour':'honor', 'honours':'honors', 'honoured':'honored'}
@@ -77,7 +78,7 @@ def reformat_logs():
         ds = ds[ds['Shown'].isnot('Paragraph')]
         ds = ds[ds['Experiment'].isnot('practice')]
         ds = ds[ds['Stimulus'].isnot('')]
-        del ds['Condition']
+        del ds['Condition']  # shadows 'Condition' from rt file and causes weird problem with update()
         if f == 'R0823_s1_stimuli_data.txt':  # change british spelling for this subject
             brit = {'favour':'favor', 'favours':'favors', 'favoured':'favored',
                     'honour':'honor', 'honours':'honors', 'honoured':'honored'}
