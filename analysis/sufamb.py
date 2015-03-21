@@ -18,9 +18,8 @@ from eelbrain.experiment import MneExperiment
 bad_channels = ['MEG 019', 'MEG 041', 'MEG 065', 'MEG 153']
 
 class SufAmb(MneExperiment):
-    '''
-    Class for Andrew's sufAmb experiment.
-    '''
+    """Class for Andrew's sufAmb experiment.
+    """
 
     groups = {'test':['R0053', 'R0606']}
     
@@ -72,8 +71,6 @@ class SufAmb(MneExperiment):
 
         ds.update(log)  # combine
 
-        ds['Trigger'] = Var( [int(x) for x in ds['Trigger']] ) # make sure Trigger is type Var
-
         return ds
 
     def load_log(self):
@@ -82,7 +79,6 @@ class SufAmb(MneExperiment):
         """
 
         subject = self.get('subject')
-        self.set(subject=subject)
 
         # load the log file
         path = self.get('log-file', fmatch=True)
@@ -91,21 +87,18 @@ class SufAmb(MneExperiment):
         # TODO keep button press triggers. Requires mangling rt to repeat each row
 
         # load the processed behavioral file + stimulus variables
-        if subject == None:
-            raise ValueError("Subject cannot be 'None'")
-        else:
-            try:
-                rtPath = os.path.join('/Volumes','BackUp','sufAmb_behavioral','combined',subject+'.txt')
-                rt = load.tsv(rtPath)
-            except IOError:
-                raise IOError('Could not find behavioral file for %s.' % subject)
+        rt_path = os.path.join('/Volumes', 'BackUp', 'sufAmb_behavioral', 'combined', subject+'.txt')
+        try:
+            rt = load.tsv(rt_path)
+        except IOError:
+            raise IOError('Could not find behavioral file for %s.' % subject)
 
         # combine the log file and behavioral/stim variable files
-        wordMap = dict((w,i) for i,w in enumerate(list(log['Stimulus'])))  # note order of words in log
+        word_map = dict((w, i) for i, w in enumerate(list(log['Stimulus'])))  # note order of words in log
         index = []
         for case in range(rt.n_cases):
             w = rt[case]['Word']
-            i = wordMap[w]
+            i = word_map[w]
             index.append(i)
         rt['index'] = Var(index)
         rt.sort('index')  # align rows of log with rt
