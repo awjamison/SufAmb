@@ -128,11 +128,6 @@ else:
 #e.set_inv(ori, depth, reg, snr, method, pick_normal)
 #e.load_inv(fiff)
 
-# parc=by lobes, masked=whole brain with medial wall removed
-# pmin = tfc for thresh free
-# mask = PALS_B12_Lobes
-# e.make_report('TypeXDominanceCategory', parc= 'PALS_B12_Lobes', pmin=0.05, tstart=0.0, tstop=0.45, samples=30)
-
 # if error, check that all subjects have the same source space
 # for subject in e:
 #     src = e.load_src()
