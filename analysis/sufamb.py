@@ -34,6 +34,7 @@ class SufAmb(MneExperiment):
               '150-450': dict(sel="BeforeOrAfter != 128", tmin=-0.15, tmax=0.45),
               '150-450bl': dict(sel_epoch='150-450', tmin=-0.15, tmax=0),
               '150-450_behav_fltr': dict(sel_epoch='150-450', sel="GoodResponse == 1", tmin=-0.15, tmax=0.45),
+              'cov': dict(sel_epoch='150-450', tmin=-0.15, tmax=0)
               }
 
     _eog_sns = ['MEG 143', 'MEG 151']
@@ -56,7 +57,7 @@ class SufAmb(MneExperiment):
     parcs = ['', 'frontal_temporal_parietal', 'SufAmb_aparc', 'SufAmb_Brodmann']
 
     def label_events(self, ds):
-        """ Wrapper for MneExperiment.label_events (which it overwrites).
+        """ Wrapper for MneExperiment.label_events.
         Combines ds of stimuli variables/behavioral statistics with the event file from ~/raw.
         This means epoch files will contain all necessary information for statistical tests, which
         obviates merging the epoch files and stat files later.
