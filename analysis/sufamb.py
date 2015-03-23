@@ -30,8 +30,8 @@ class SufAmb(MneExperiment):
     
     bad_channels = bad_channels
     
-    epochs = {'100-600': dict(sel="BeforeOrAfter != '128'", tmin=-0.15, tmax=0.6),
-              '150-450': dict(sel="BeforeOrAfter != '128'", tmin=-0.15, tmax=0.45),
+    epochs = {'100-600': dict(sel="BeforeOrAfter != 128", tmin=-0.15, tmax=0.6),
+              '150-450': dict(sel="BeforeOrAfter != 128", tmin=-0.15, tmax=0.45),
               '150-450bl': dict(sel_epoch='150-450', tmin=-0.15, tmax=0),
               '150-450_behav_fltr': dict(sel_epoch='150-450', sel="GoodResponse == 1", tmin=-0.15, tmax=0.45),
               }
@@ -120,7 +120,6 @@ else:
     print "Trying to connect to data drive."
     e = SufAmb('/Volumes/BackUp/sufAmb')
 
-        
 # Number of good trials per condition
 # total: table.frequencies(Y='accept',ds=e.load_selected_events(reject='keep'))
 # by condition: # print table.frequencies(Y='Condition',ds=e.load_selected_events(reject='keep').sub("accept==True"))
